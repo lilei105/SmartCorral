@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Linq;
 using SmartCorral.Models;
 using SmartCorral.Services.Com;
@@ -122,14 +123,33 @@ public class FrameManager
         var f = new DataFrame
         {
             Title = category,
-            X = 120 + (Data.Frames.Count * 40),
-            Y = 120 + (Data.Frames.Count * 30),
-            Width = 360,
-            Height = 240
+            X = 120,
+            Y = 120,
+            Width = 320,
+            Height = 200
         };
         Data.Frames.Add(f);
         Open(f);
         return f;
+    }
+
+    /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>
+    public void ArrangeAll()
+    {
+        FrameArranger.Arrange(Data.Frames, SystemParameters.WorkArea);
+        foreach (var (id, win) in _windows)
+        {
+            var f = Data.Frames.FirstOrDefault(x => x.Id == id);
+            if (f != null) { win.Left = f.X; win.Top = f.Y; }
+        }
+        Persist();
+    }
+
+    /// <summary>Screen-space bounds of other open frames (for magnetic snap while dragging).</summary>
+    public System.Collections.Generic.IEnumerable<Rect> GetOpenFrameBounds(System.Guid except)
+    {
+        foreach (var (id, win) in _windows)
+            if (id != except) yield return new Rect(win.Left, win.Top, win.ActualWidth > 0 ? win.ActualWidth : win.Width, win.ActualHeight > 0 ? win.ActualHeight : win.Height);
     }
 
     /// <summary>Re-renders a frame's window after its items changed.</summary>

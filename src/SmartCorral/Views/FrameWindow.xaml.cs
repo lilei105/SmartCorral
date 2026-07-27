@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Windows;
@@ -19,15 +20,24 @@ namespace SmartCorral.Views;
 
 /// <summary>
 /// A DataFrame window. Drop files to add them; right-click for frame actions;
-/// double-click the title bar to roll up/down; lock to freeze position.
+/// double-click the title to roll up/down; drag for magnetic snapping to edges/frames.
 /// </summary>
 public partial class FrameWindow
 {
+    private const double SnapThreshold = 10.0;
+    private const double SnapGap = 12.0;
+
     private readonly DataFrame _frame;
     private readonly FrameManager _mgr;
     private readonly DispatcherTimer _saveTimer;
     private bool _rolled;
     private double _restoredHeight;
+
+    // custom drag state
+    private bool _dragging;
+    private Point _dragOriginScreen;
+    private double _dragOriginLeft;
+    private double _dragOriginTop;
 
     public FrameWindow(DataFrame frame, FrameManager mgr)
     {
@@ -36,7 +46,6 @@ public partial class FrameWindow
         InitializeComponent();
         TitleText.Text = frame.Title;
 
-        // debounced live-save of position/size
         _saveTimer = new DispatcherTimer { Interval = System.TimeSpan.FromMilliseconds(500) };
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); _mgr.Persist(); };
         LocationChanged += ScheduleSave;
@@ -45,7 +54,7 @@ public partial class FrameWindow
         ApplyLockState();
         if (frame.IsRolled)
         {
-            _rolled = false; // ToggleRoll flips it to true
+            _rolled = false;
             ToggleRoll();
         }
     }
@@ -119,7 +128,7 @@ public partial class FrameWindow
         }
     }
 
-    // ---- drag/drop ----
+    // ---- drag/drop of files ----
     private void Frame_DragOver(object sender, DragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
@@ -136,12 +145,78 @@ public partial class FrameWindow
         }
     }
 
-    // ---- title bar ----
+    // ---- custom drag with magnetic snap ----
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount >= 2) { ToggleRoll(); return; }
         if (_frame.IsLocked) return;
-        if (e.ButtonState == MouseButtonState.Pressed) DragMove();
+
+        _dragging = true;
+        _dragOriginLeft = Left;
+        _dragOriginTop = Top;
+        _dragOriginScreen = PointToScreen(e.GetPosition(this));
+        CaptureMouse();
+    }
+
+    private void Window_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        Point cur = PointToScreen(e.GetPosition(this));
+        double nl = _dragOriginLeft + (cur.X - _dragOriginScreen.X);
+        double nt = _dragOriginTop + (cur.Y - _dragOriginScreen.Y);
+        (double sx, double sy) = Snap(nl, nt);
+        Left = sx;
+        Top = sy;
+    }
+
+    private void Window_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (!_dragging) return;
+        _dragging = false;
+        ReleaseMouseCapture();
+    }
+
+    private (double x, double y) Snap(double left, double top)
+    {
+        double w = ActualWidth > 0 ? ActualWidth : Width;
+        double h = ActualHeight > 0 ? ActualHeight : Height;
+        Rect work = SystemParameters.WorkArea;
+
+        var xs = new List<double>
+        {
+            work.Left, work.Left + SnapGap,
+            work.Right - w, work.Right - w - SnapGap
+        };
+        var ys = new List<double>
+        {
+            work.Top, work.Top + SnapGap,
+            work.Bottom - h, work.Bottom - h - SnapGap
+        };
+        foreach (var r in _mgr.GetOpenFrameBounds(_frame.Id))
+        {
+            xs.Add(r.Left);
+            xs.Add(r.Right);
+            xs.Add(r.Right + SnapGap); // sit to the right of it, with a gap
+            ys.Add(r.Top);
+            ys.Add(r.Bottom);
+            ys.Add(r.Bottom + SnapGap); // sit below it, with a gap
+        }
+
+        double bestX = left, bestDX = SnapThreshold;
+        foreach (double c in xs)
+        {
+            double d = System.Math.Abs(left - c);
+            if (d < bestDX) { bestDX = d; bestX = c; }
+        }
+
+        double bestY = top, bestDY = SnapThreshold;
+        foreach (double c in ys)
+        {
+            double d = System.Math.Abs(top - c);
+            if (d < bestDY) { bestDY = d; bestY = c; }
+        }
+
+        return (bestX, bestY);
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();

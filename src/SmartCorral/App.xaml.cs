@@ -26,7 +26,7 @@ public partial class App : Application
 
         // 2. Load settings + tray
         _settings = PersistenceService.LoadSettings();
-        _tray = new TrayShell(OpenSettings);
+        _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll());
 
         // 3. Take over the desktop: hide native icons (restore on exit; crash-recover on next launch).
         DesktopShell.Startup();

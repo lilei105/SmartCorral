@@ -13,6 +13,8 @@
         AllowDrop="True"
         Drop="Frame_Drop"
         DragOver="Frame_DragOver"
+        MouseMove="Window_MouseMove"
+        MouseLeftButtonUp="Window_MouseUp"
         Title="Smart Corral">
 
     <Border x:Name="RootBorder"
