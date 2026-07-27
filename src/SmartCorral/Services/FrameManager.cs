@@ -51,10 +51,11 @@ public class FrameManager
         foreach (string file in files)
         {
             bool isFolder = System.IO.Directory.Exists(file);
+            bool isLink = file.EndsWith(".url", System.StringComparison.OrdinalIgnoreCase);
             string display = System.IO.Path.GetFileNameWithoutExtension(file);
 
-            string relative = ShortcutService.CreateShortcut(file, display);
-            string target = ShortcutService.Resolve(relative);
+            string relative = ShortcutService.Import(file, display);
+            string target = ShortcutService.ResolveTarget(relative);
             if (string.IsNullOrEmpty(target)) target = file;
 
             frame.Items.Add(new FrameItem
@@ -62,6 +63,7 @@ public class FrameManager
                 Filename = relative,
                 DisplayName = display,
                 IsFolder = isFolder,
+                IsLink = isLink,
                 Target = target,
                 DisplayOrder = frame.Items.Count
             });

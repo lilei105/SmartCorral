@@ -6,6 +6,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using SmartCorral.Models;
 using SmartCorral.Services;
+using SmartCorral.Services.Com;
 
 // Resolve WPF drag/drop types (ambiguous with WinForms, which is enabled for the tray).
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -80,11 +81,14 @@ public partial class FrameWindow
 
     private void Item_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is Button b && b.Tag is FrameItem item && !string.IsNullOrEmpty(item.Target))
+        if (sender is Button b && b.Tag is FrameItem item && !string.IsNullOrEmpty(item.Filename))
         {
             try
             {
-                Process.Start(new ProcessStartInfo(item.Target) { UseShellExecute = true });
+                // Launch the .lnk/.url itself via the shell so the shortcut's working-dir / args / icon
+                // are applied — identical to double-clicking the desktop shortcut (OBS etc. rely on it).
+                string abs = ShortcutService.AbsolutePath(item.Filename);
+                Process.Start(new ProcessStartInfo(abs) { UseShellExecute = true });
             }
             catch
             {
