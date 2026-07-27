@@ -11,8 +11,36 @@ public static class PersistenceService
 {
     private static readonly string DataDir = Path.Combine(AppContext.BaseDirectory, "data");
     private static readonly string FramesFile = Path.Combine(DataDir, "frames.json");
+    private static readonly string SettingsFile = Path.Combine(DataDir, "settings.json");
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+
+    public static AppSettings LoadSettings()
+    {
+        try
+        {
+            if (!File.Exists(SettingsFile)) return new AppSettings();
+            string json = File.ReadAllText(SettingsFile);
+            return JsonSerializer.Deserialize<AppSettings>(json, Options) ?? new AppSettings();
+        }
+        catch
+        {
+            return new AppSettings();
+        }
+    }
+
+    public static void SaveSettings(AppSettings settings)
+    {
+        try
+        {
+            Directory.CreateDirectory(DataDir);
+            File.WriteAllText(SettingsFile, JsonSerializer.Serialize(settings, Options));
+        }
+        catch
+        {
+            // TODO: log
+        }
+    }
 
     public static AppData Load()
     {

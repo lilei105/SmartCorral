@@ -1,5 +1,7 @@
 using System.Windows;
+using SmartCorral.Models;
 using SmartCorral.Services;
+using SmartCorral.Services.Ai;
 using SmartCorral.Views;
 
 // Resolve the WPF Application (avoid ambiguity with System.Windows.Forms.Application, since WinForms is enabled for the tray).
@@ -11,6 +13,7 @@ public partial class App : Application
 {
     private TrayShell? _tray;
     private FrameManager? _frames;
+    private AppSettings _settings = new();
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
@@ -21,8 +24,9 @@ public partial class App : Application
             return;
         }
 
-        // 2. Tray (so the app has a presence without a main window)
-        _tray = new TrayShell();
+        // 2. Load settings + tray
+        _settings = PersistenceService.LoadSettings();
+        _tray = new TrayShell(OpenSettings);
 
         // 3. Take over the desktop: hide native icons (restore on exit; crash-recover on next launch).
         DesktopShell.Startup();
@@ -30,6 +34,9 @@ public partial class App : Application
         // 4. Load frames + show windows
         _frames = new FrameManager();
         _frames.Initialize();
+
+        // 5. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
+        _ = AiOrganizeService.RunAsync(_frames, _settings);
 
         // Best-effort restore on a hard exit; the flag file covers anything this misses next launch.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => DesktopShell.Shutdown();
@@ -40,5 +47,11 @@ public partial class App : Application
         _frames?.Persist();
         DesktopShell.Shutdown();
         _tray?.Dispose();
+    }
+
+    private void OpenSettings()
+    {
+        var w = new SettingsWindow(_settings) { Owner = null };
+        w.ShowDialog();
     }
 }

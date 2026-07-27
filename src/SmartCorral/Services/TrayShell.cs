@@ -8,14 +8,14 @@ using WpfApp = System.Windows.Application;
 namespace SmartCorral.Services;
 
 /// <summary>
-/// System-tray presence so the app can run with no main window. Right-click → Exit.
-/// (WinForms NotifyIcon — proven and dependency-free; the rest of the app stays WPF.)
+/// System-tray presence so the app can run with no main window.
+/// Menu: AI Settings… / Exit.
 /// </summary>
 public sealed class TrayShell : IDisposable
 {
     private readonly NotifyIcon _icon;
 
-    public TrayShell()
+    public TrayShell(Action onOpenSettings)
     {
         _icon = new NotifyIcon
         {
@@ -25,6 +25,8 @@ public sealed class TrayShell : IDisposable
         };
 
         var menu = new ContextMenuStrip();
+        menu.Items.Add("AI Settings…", null, (_, _) => onOpenSettings());
+        menu.Items.Add("-");
         menu.Items.Add("退出 / Exit", null, (_, _) => WpfApp.Current?.Shutdown());
         _icon.ContextMenuStrip = menu;
     }

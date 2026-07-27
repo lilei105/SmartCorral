@@ -57,7 +57,7 @@ public partial class FrameWindow
     }
 
     // ---- items ----
-    private void RenderItems()
+    public void RenderItems()
     {
         IconsPanel.Children.Clear();
         foreach (var item in _frame.Items.OrderBy(i => i.DisplayOrder))

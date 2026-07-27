@@ -14,4 +14,7 @@ public class FrameItem
     public int DisplayOrder { get; set; }
     /// <summary>Resolved target path (cached for icon extraction / launch).</summary>
     public string? Target { get; set; }
+
+    /// <summary>The original source file path (e.g. desktop file) this item was imported from — used to avoid duplicates.</summary>
+    public string? SourcePath { get; set; }
 }

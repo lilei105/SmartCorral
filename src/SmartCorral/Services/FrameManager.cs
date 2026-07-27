@@ -45,31 +45,34 @@ public class FrameManager
         win.Show();
     }
 
-    /// <summary>Drops real files (from the shell) into a frame: writes .lnk shortcuts, adds items.</summary>
+    /// <summary>Drops real files (from the shell) into a frame.</summary>
     public void AddDroppedFiles(DataFrame frame, string[] files)
     {
         foreach (string file in files)
-        {
-            bool isFolder = System.IO.Directory.Exists(file);
-            bool isLink = file.EndsWith(".url", System.StringComparison.OrdinalIgnoreCase);
-            string display = System.IO.Path.GetFileNameWithoutExtension(file);
-
-            string relative = ShortcutService.Import(file, display);
-            string target = ShortcutService.ResolveTarget(relative);
-            if (string.IsNullOrEmpty(target)) target = file;
-
-            frame.Items.Add(new FrameItem
-            {
-                Filename = relative,
-                DisplayName = display,
-                IsFolder = isFolder,
-                IsLink = isLink,
-                Target = target,
-                DisplayOrder = frame.Items.Count
-            });
-        }
-
+            AddDesktopFile(frame, file, System.IO.Path.GetFileNameWithoutExtension(file));
         Persist();
+    }
+
+    /// <summary>Imports one file as a shortcut item into a frame (shared by manual drop + AI).</summary>
+    public void AddDesktopFile(DataFrame frame, string fullPath, string displayName)
+    {
+        bool isFolder = System.IO.Directory.Exists(fullPath);
+        bool isLink = fullPath.EndsWith(".url", System.StringComparison.OrdinalIgnoreCase);
+
+        string relative = ShortcutService.Import(fullPath, displayName);
+        string target = ShortcutService.ResolveTarget(relative);
+        if (string.IsNullOrEmpty(target)) target = fullPath;
+
+        frame.Items.Add(new FrameItem
+        {
+            Filename = relative,
+            DisplayName = displayName,
+            IsFolder = isFolder,
+            IsLink = isLink,
+            Target = target,
+            SourcePath = fullPath,
+            DisplayOrder = frame.Items.Count
+        });
     }
 
     public void AddFrame()
@@ -100,6 +103,39 @@ public class FrameManager
         if (f == null) return;
         f.Title = name;
         PersistenceService.Save(Data);
+    }
+
+    /// <summary>All source paths already imported across frames (to skip already-filed desktop files).</summary>
+    public System.Collections.Generic.IEnumerable<string> AllItemSourcePaths()
+    {
+        foreach (var f in Data.Frames.OfType<DataFrame>())
+            foreach (var it in f.Items)
+                if (!string.IsNullOrEmpty(it.SourcePath)) yield return it.SourcePath;
+    }
+
+    /// <summary>Create-or-find a DataFrame whose title equals this category.</summary>
+    public DataFrame EnsureCategoryFrame(string category)
+    {
+        var existing = Data.Frames.OfType<DataFrame>().FirstOrDefault(x => x.Title == category);
+        if (existing != null) return existing;
+
+        var f = new DataFrame
+        {
+            Title = category,
+            X = 120 + (Data.Frames.Count * 40),
+            Y = 120 + (Data.Frames.Count * 30),
+            Width = 360,
+            Height = 240
+        };
+        Data.Frames.Add(f);
+        Open(f);
+        return f;
+    }
+
+    /// <summary>Re-renders a frame's window after its items changed.</summary>
+    public void Refresh(Frame frame)
+    {
+        if (_windows.TryGetValue(frame.Id, out var win)) win.RenderItems();
     }
 
     /// <summary>Syncs live window bounds back into the models and writes data/frames.json.</summary>
