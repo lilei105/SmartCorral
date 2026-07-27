@@ -8,6 +8,8 @@
         ShowInTaskbar="False"
         Topmost="True"
         Width="380" Height="240"
+        MinWidth="180"
+        MinHeight="120"
         ResizeMode="CanResizeWithGrip"
         FontFamily="Segoe UI"
         AllowDrop="True"
@@ -15,6 +17,7 @@
         DragOver="Frame_DragOver"
         MouseMove="Window_MouseMove"
         MouseLeftButtonUp="Window_MouseUp"
+        PreviewMouseLeftButtonDown="Window_PreviewMouseDown"
         Title="Smart Corral">
 
     <Border x:Name="RootBorder"

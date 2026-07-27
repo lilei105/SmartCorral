@@ -26,7 +26,7 @@ public partial class App : Application
 
         // 2. Load settings + tray
         _settings = PersistenceService.LoadSettings();
-        _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll());
+        _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll(), ReorganizeAll);
 
         // 3. Take over the desktop: hide native icons (restore on exit; crash-recover on next launch).
         DesktopShell.Startup();
@@ -53,5 +53,12 @@ public partial class App : Application
     {
         var w = new SettingsWindow(_settings) { Owner = null };
         w.ShowDialog();
+    }
+
+    private void ReorganizeAll()
+    {
+        // Wipe all frames/shortcuts, then re-run AI over the whole desktop.
+        _frames?.ClearAll();
+        if (_frames != null) _ = AiOrganizeService.RunAsync(_frames, _settings);
     }
 }

@@ -10,6 +10,7 @@ using Microsoft.VisualBasic;
 using SmartCorral.Models;
 using SmartCorral.Services;
 using SmartCorral.Services.Com;
+using SmartCorral.Services.Platform;
 
 // Resolve WPF drag/drop types (WinForms is removed from implicit usings, but keep these explicit).
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -50,6 +51,14 @@ public partial class FrameWindow
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); _mgr.Persist(); };
         LocationChanged += ScheduleSave;
         SizeChanged += ScheduleSave;
+
+        // capture DPI so MonitorService can convert device px <-> DIPs (multi-monitor).
+        ContentRendered += (_, _) =>
+        {
+            var d = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+            MonitorService.DpiScaleX = d.DpiScaleX;
+            MonitorService.DpiScaleY = d.DpiScaleY;
+        };;
 
         ApplyLockState();
         if (frame.IsRolled)
@@ -164,23 +173,27 @@ public partial class FrameWindow
         Point cur = PointToScreen(e.GetPosition(this));
         double nl = _dragOriginLeft + (cur.X - _dragOriginScreen.X);
         double nt = _dragOriginTop + (cur.Y - _dragOriginScreen.Y);
-        (double sx, double sy) = Snap(nl, nt);
+        var (sx, sy, snapX, snapY) = Snap(nl, nt);
         Left = sx;
         Top = sy;
+
+        if (snapX) SnapGuide.ShowVertical(sx); else SnapGuide.HideVertical();
+        if (snapY) SnapGuide.ShowHorizontal(sy); else SnapGuide.HideHorizontal();
     }
 
     private void Window_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (!_dragging) return;
         _dragging = false;
+        SnapGuide.Hide();
         ReleaseMouseCapture();
     }
 
-    private (double x, double y) Snap(double left, double top)
+    private (double x, double y, bool snapX, bool snapY) Snap(double left, double top)
     {
         double w = ActualWidth > 0 ? ActualWidth : Width;
         double h = ActualHeight > 0 ? ActualHeight : Height;
-        Rect work = SystemParameters.WorkArea;
+        Rect work = MonitorService.WorkAreaForPoint(left, top);
 
         var xs = new List<double>
         {
@@ -216,10 +229,19 @@ public partial class FrameWindow
             if (d < bestDY) { bestDY = d; bestY = c; }
         }
 
-        return (bestX, bestY);
+        return (bestX, bestY, bestDX < SnapThreshold, bestDY < SnapThreshold);
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => BringToFront();
+
+    /// <summary>Re-assert topmost to raise this frame above sibling frames (no focus change).</summary>
+    private void BringToFront()
+    {
+        Topmost = false;
+        Topmost = true;
+    }
 
     // ---- context menu actions ----
     private void NewFrame_Click(object sender, RoutedEventArgs e) => _mgr.AddFrame();
@@ -258,11 +280,13 @@ public partial class FrameWindow
         {
             _restoredHeight = Height;
             ItemsScroll.Visibility = Visibility.Collapsed;
+            MinHeight = 40;
             Height = 62;
         }
         else
         {
             ItemsScroll.Visibility = Visibility.Visible;
+            MinHeight = 120;
             if (_restoredHeight > 0) Height = _restoredHeight;
         }
         _frame.IsRolled = _rolled;

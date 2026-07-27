@@ -9,13 +9,13 @@ namespace SmartCorral.Services;
 
 /// <summary>
 /// System-tray presence so the app can run with no main window.
-/// Menu: AI Settings… / Auto-arrange / Exit.
+/// Menu: AI Settings… / Auto-arrange / Re-organize all / Exit.
 /// </summary>
 public sealed class TrayShell : IDisposable
 {
     private readonly NotifyIcon _icon;
 
-    public TrayShell(Action onOpenSettings, Action onAutoArrange)
+    public TrayShell(Action onOpenSettings, Action onAutoArrange, Action onReorganizeAll)
     {
         _icon = new NotifyIcon
         {
@@ -27,6 +27,7 @@ public sealed class TrayShell : IDisposable
         var menu = new ContextMenuStrip();
         menu.Items.Add("AI Settings…", null, (_, _) => onOpenSettings());
         menu.Items.Add("Auto-arrange", null, (_, _) => onAutoArrange());
+        menu.Items.Add("重新整理全部 / Re-organize all", null, (_, _) => onReorganizeAll());
         menu.Items.Add("-");
         menu.Items.Add("退出 / Exit", null, (_, _) => WpfApp.Current?.Shutdown());
         _icon.ContextMenuStrip = menu;

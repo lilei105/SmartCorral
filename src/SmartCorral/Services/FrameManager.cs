@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Linq;
+using SmartCorral.Services.Platform;
 using SmartCorral.Models;
 using SmartCorral.Services.Com;
 using SmartCorral.Views;
@@ -136,7 +137,7 @@ public class FrameManager
     /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>
     public void ArrangeAll()
     {
-        FrameArranger.Arrange(Data.Frames, SystemParameters.WorkArea);
+        FrameArranger.Arrange(Data.Frames, MonitorService.WorkAreaForMouse());
         foreach (var (id, win) in _windows)
         {
             var f = Data.Frames.FirstOrDefault(x => x.Id == id);
@@ -169,6 +170,23 @@ public class FrameManager
             if (_windows.TryGetValue(f.Id, out var win)) { _windows.Remove(f.Id); win.Close(); }
             Data.Frames.Remove(f);
         }
+    }
+
+    /// <summary>Closes all frames and wipes their items + shortcuts (used by 'Re-organize all').</summary>
+    public void ClearAll()
+    {
+        foreach (var (id, win) in _windows.ToList()) win.Close();
+        _windows.Clear();
+        Data.Frames.Clear();
+
+        try
+        {
+            string sd = System.IO.Path.Combine(AppContext.BaseDirectory, "data", "shortcuts");
+            if (System.IO.Directory.Exists(sd)) System.IO.Directory.Delete(sd, true);
+        }
+        catch { }
+
+        Persist();
     }
 
     /// <summary>Syncs live window bounds back into the models and writes data/frames.json.</summary>
