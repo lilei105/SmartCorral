@@ -138,6 +138,19 @@ public class FrameManager
         if (_windows.TryGetValue(frame.Id, out var win)) win.RenderItems();
     }
 
+    /// <summary>Removes any empty default "New Frame" windows once real frames exist.</summary>
+    public void RemoveEmptyDefaultFrames()
+    {
+        var toRemove = Data.Frames.OfType<DataFrame>()
+            .Where(f => f.Title == "New Frame" && f.Items.Count == 0 && Data.Frames.Count > 1)
+            .ToList();
+        foreach (var f in toRemove)
+        {
+            if (_windows.TryGetValue(f.Id, out var win)) { _windows.Remove(f.Id); win.Close(); }
+            Data.Frames.Remove(f);
+        }
+    }
+
     /// <summary>Syncs live window bounds back into the models and writes data/frames.json.</summary>
     public void Persist()
     {

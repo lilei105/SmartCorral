@@ -29,8 +29,8 @@ public static class AiOrganizeService
         var toCategorize = allFiles.Where(f => !existing.Contains(f.FullPath)).ToList();
         if (toCategorize.Count == 0) return;
 
-        // 3. Categorize via LLM (off-thread).
-        Dictionary<string, string> assignments;
+        // 3. Categorize via LLM (off-thread) — index-keyed so name echo can't mismatch.
+        Dictionary<int, string> assignments;
         try
         {
             using var llm = new LlmClient(settings.AiBaseUrl, settings.AiApiKey, settings.AiModel);
@@ -45,15 +45,17 @@ public static class AiOrganizeService
         // 4. Apply on the UI thread (frame creation + COM shortcut import + render).
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
-            foreach (var file in toCategorize)
+            for (int i = 0; i < toCategorize.Count; i++)
             {
-                if (!assignments.TryGetValue(file.DisplayName, out string? category))
-                    category = "Other";
+                if (!assignments.TryGetValue(i + 1, out string? category))
+                    continue; // model didn't return this one — leave it where it is
 
+                var file = toCategorize[i];
                 var frame = frames.EnsureCategoryFrame(category);
                 frames.AddDesktopFile(frame, file.FullPath, file.DisplayName);
                 frames.Refresh(frame);
             }
+            frames.RemoveEmptyDefaultFrames();
             frames.Persist();
         });
     }

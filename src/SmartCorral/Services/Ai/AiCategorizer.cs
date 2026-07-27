@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -8,28 +10,39 @@ namespace SmartCorral.Services.Ai;
 /// <summary>A desktop file the LLM will categorize.</summary>
 public sealed record FileDescriptor(string FullPath, string DisplayName, string Ext);
 
-/// <summary>Text-first categorization: one batched LLM call maps each file name to a category.</summary>
+/// <summary>Text-first categorization: one batched LLM call maps each file (by 1-based index) to a category.</summary>
 public static class AiCategorizer
 {
     private const string SystemPrompt =
-        "You categorize files on a user's Windows desktop into a SMALL number (3-6) of clean, " +
-        "human-readable category names. Reply ONLY with JSON of this exact shape: " +
-        "{\"assignments\":[{\"name\":\"<exact file name>\",\"category\":\"<category>\"}]}. " +
-        "Echo the EXACT 'name' given for every file. Category names: concise, in the SAME language " +
-        "as the file names (Chinese if the names are Chinese, otherwise English). " +
-        "Use at most 6 distinct categories. No commentary, no extra fields.";
+        "You categorize files on a user's Windows desktop into BROAD buckets. " +
+        "Use AT MOST 5 distinct categories — strongly prefer FEWER, larger groups over many tiny ones. " +
+        "Typical umbrella categories: 游戏 / 办公 / 开发 / 媒体 / 工具 / 社交 / 系统 — pick whatever fits " +
+        "THIS user's files, but keep the total to <=5. The user gives a NUMBERED list. " +
+        "Reply ONLY with JSON: {\"assignments\":[{\"index\":<number>,\"category\":\"<category>\"}]}. " +
+        "'index' is the file's number from the list. Provide ONE entry for EVERY number. " +
+        "Category names: concise, in the SAME language as the file names (Chinese if the names " +
+        "are Chinese, otherwise English). No commentary.";
 
-    public static async Task<Dictionary<string, string>> CategorizeAsync(
+    public static async Task<Dictionary<int, string>> CategorizeAsync(
         LlmClient llm, IReadOnlyList<FileDescriptor> files)
     {
-        if (files.Count == 0) return new Dictionary<string, string>();
+        var result = new Dictionary<int, string>();
+        if (files.Count == 0) return result;
 
-        string user = "Categorize these desktop files. Reply with JSON only.\n" +
-                      string.Join("\n", files.Select(f => $"- {f.DisplayName} (.{f.Ext})"));
+        string user = "Categorize these desktop files (reply JSON only):\n" +
+                      string.Join("\n", files.Select((f, i) => $"{i + 1}. {f.DisplayName} (.{f.Ext})"));
 
         string? content = await llm.ChatJsonAsync(SystemPrompt, user);
 
-        var result = new Dictionary<string, string>();
+        // Debug dump — the raw model response, handy when something looks off.
+        try
+        {
+            string dump = Path.Combine(AppContext.BaseDirectory, "data", "last_ai.txt");
+            Directory.CreateDirectory(Path.GetDirectoryName(dump)!);
+            File.WriteAllText(dump, content ?? "<null>");
+        }
+        catch { }
+
         if (string.IsNullOrWhiteSpace(content)) return result;
 
         try
@@ -39,18 +52,19 @@ public static class AiCategorizer
             {
                 foreach (var el in arr.EnumerateArray())
                 {
-                    string? name = el.TryGetProperty("name", out var n) ? n.GetString() : null;
-                    string? cat = el.TryGetProperty("category", out var c) ? c.GetString() : null;
-                    if (!string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(cat))
+                    if (el.TryGetProperty("index", out var idx) &&
+                        el.TryGetProperty("category", out var catEl) &&
+                        idx.TryGetInt32(out int i))
                     {
-                        result[name!.Trim()] = cat!.Trim();
+                        string? cat = catEl.GetString();
+                        if (!string.IsNullOrWhiteSpace(cat)) result[i] = cat!.Trim();
                     }
                 }
             }
         }
         catch
         {
-            // malformed JSON — return whatever we parsed so far
+            // malformed JSON — return what we parsed
         }
 
         return result;
