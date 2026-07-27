@@ -52,6 +52,7 @@ public class FrameManager
     {
         foreach (string file in files)
             AddDesktopFile(frame, file, System.IO.Path.GetFileNameWithoutExtension(file));
+        SizeFramesToContent();
         Persist();
     }
 
@@ -126,12 +127,23 @@ public class FrameManager
             Title = category,
             X = 120,
             Y = 120,
-            Width = 320,
+            Width = FrameSizer.DefaultWidth,
             Height = 200
         };
         Data.Frames.Add(f);
         Open(f);
         return f;
+    }
+
+    /// <summary>Resizes every frame's height to fit its items (no scroll). Call after items change.</summary>
+    public void SizeFramesToContent()
+    {
+        foreach (var f in Data.Frames.OfType<DataFrame>().ToList())
+        {
+            f.Width = FrameSizer.DefaultWidth;
+            f.Height = FrameSizer.HeightFor(f.Items.Count, f.Width);
+            if (_windows.TryGetValue(f.Id, out var win)) { win.Width = f.Width; win.Height = f.Height; }
+        }
     }
 
     /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>

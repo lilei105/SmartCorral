@@ -56,6 +56,7 @@ public static class AiOrganizeService
                 frames.Refresh(frame);
             }
             frames.RemoveEmptyDefaultFrames();
+            frames.SizeFramesToContent();
             frames.ArrangeAll();   // right-aligned grid + persist
         });
     }
