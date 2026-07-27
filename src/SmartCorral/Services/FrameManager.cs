@@ -72,6 +72,36 @@ public class FrameManager
         Persist();
     }
 
+    public void AddFrame()
+    {
+        var f = new DataFrame { Title = "New Frame", X = 220, Y = 220, Width = 360, Height = 240 };
+        Data.Frames.Add(f);
+        Open(f);
+        Persist();
+    }
+
+    public void DeleteFrame(System.Guid id)
+    {
+        var f = Data.Frames.FirstOrDefault(x => x.Id == id);
+        if (f == null) return;
+        if (_windows.TryGetValue(id, out var win))
+        {
+            _windows.Remove(id);
+            win.Close();
+        }
+        Data.Frames.Remove(f);
+        Persist();
+        if (Data.Frames.Count == 0) AddFrame(); // always keep at least one
+    }
+
+    public void RenameFrame(System.Guid id, string name)
+    {
+        var f = Data.Frames.FirstOrDefault(x => x.Id == id);
+        if (f == null) return;
+        f.Title = name;
+        PersistenceService.Save(Data);
+    }
+
     /// <summary>Syncs live window bounds back into the models and writes data/frames.json.</summary>
     public void Persist()
     {

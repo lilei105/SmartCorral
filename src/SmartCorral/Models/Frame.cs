@@ -16,4 +16,5 @@ public abstract class Frame
     public double Width { get; set; } = 360;
     public double Height { get; set; } = 220;
     public bool IsLocked { get; set; } = false;
+    public bool IsRolled { get; set; } = false;
 }
