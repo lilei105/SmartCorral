@@ -177,8 +177,8 @@ public partial class FrameWindow
         Left = sx;
         Top = sy;
 
-        if (snapX) SnapGuide.ShowVertical(sx); else SnapGuide.HideVertical();
-        if (snapY) SnapGuide.ShowHorizontal(sy); else SnapGuide.HideHorizontal();
+        if (snapX) SnapGuide.ShowVertical(sx, sy); else SnapGuide.HideVertical();
+        if (snapY) SnapGuide.ShowHorizontal(sx, sy); else SnapGuide.HideHorizontal();
     }
 
     private void Window_MouseUp(object sender, MouseButtonEventArgs e)
