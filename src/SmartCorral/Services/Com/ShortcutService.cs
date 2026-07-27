@@ -65,6 +65,36 @@ public static class ShortcutService
     /// <summary>Absolute path for a shortcut stored relative to data/.</summary>
     public static string AbsolutePath(string relativePath) => Path.Combine(DataDir, relativePath);
 
+    /// <summary>Reads a .lnk's IconLocation ("path,index" or "") and target. Used to fetch the icon
+    /// WITHOUT the shortcut arrow overlay (which SHGetFileInfo(.lnk) would include).</summary>
+    public static (string Source, int Index, string Target) ResolveIconLocation(string absLnkPath)
+    {
+        try
+        {
+            Type t = Type.GetTypeFromProgID("WScript.Shell")!;
+            dynamic shell = Activator.CreateInstance(t)!;
+            dynamic sc = shell.CreateShortcut(absLnkPath);
+            string il = (string)sc.IconLocation;
+            string target = (string)sc.TargetPath;
+
+            string src = "";
+            int idx = 0;
+            if (!string.IsNullOrWhiteSpace(il))
+            {
+                int comma = il.LastIndexOf(',');
+                if (comma >= 0 && int.TryParse(il.Substring(comma + 1).Trim(), out idx))
+                    src = il.Substring(0, comma).Trim();
+                else
+                    src = il.Trim();
+            }
+            return (src, idx, target ?? string.Empty);
+        }
+        catch
+        {
+            return (string.Empty, 0, string.Empty);
+        }
+    }
+
     private static void CreateNewLnk(string absLnkPath, string targetPath)
     {
         Type t = Type.GetTypeFromProgID("WScript.Shell")

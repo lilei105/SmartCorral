@@ -71,6 +71,8 @@ public partial class FrameWindow
             _rolled = false;
             ToggleRoll();
         }
+
+        RenderItems();
     }
 
     private void ScheduleSave(object? sender, EventArgs e)
@@ -91,9 +93,14 @@ public partial class FrameWindow
 
     private UIElement BuildItem(FrameItem item)
     {
+        // Show the shortcut arrow ONLY if the ORIGINAL desktop item was a .lnk — raw files/folders
+        // we wrapped in a .lnk should look like themselves, not like shortcuts.
+        bool showArrow = !string.IsNullOrEmpty(item.SourcePath)
+                         && item.SourcePath.EndsWith(".lnk", System.StringComparison.OrdinalIgnoreCase);
+
         var icon = new Image
         {
-            Source = IconService.GetIcon(ShortcutService.AbsolutePath(item.Filename)),
+            Source = IconService.GetIconForShortcutFile(ShortcutService.AbsolutePath(item.Filename), showArrow),
             Width = 32,
             Height = 32,
             HorizontalAlignment = HorizontalAlignment.Center

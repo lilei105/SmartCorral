@@ -6,38 +6,33 @@ namespace SmartCorral.Services;
 
 /// <summary>
 /// Owns the "session tidy" of the desktop: hides native icons while Smart Corral runs and
-/// reliably restores them on exit. Crash self-heal: a flag file remembers the original state,
-/// so if the app is killed (no clean exit), the next launch restores it.
+/// ALWAYS restores them (visible) on exit. A flag file arms crash self-heal: if the app is
+/// killed without a clean exit, the next launch sees the flag and force-restores.
+///
+/// NOTE: we intentionally do NOT trust a captured "original state". A prior hard crash can leave
+/// the desktop hidden, which would make us capture the wrong state and then "restore" to hidden.
+/// Restoring to visible on exit is the safe, correct behavior for the session-tidy model.
 /// </summary>
 public static class DesktopShell
 {
     private static readonly string DataDir = Path.Combine(AppContext.BaseDirectory, "data");
     private static readonly string FlagFile = Path.Combine(DataDir, ".icons_hidden");
 
-    private static bool _originalVisible = true;
-
-    /// <summary>Call at startup. Performs crash-recovery (if a prior run left icons hidden),
-    /// then records the current state, hides icons, and arms the flag file.</summary>
     public static void Startup()
     {
         try
         {
             Directory.CreateDirectory(DataDir);
 
-            // 1. Crash recovery: a leftover flag means the last run never restored — fix that first.
+            // Crash recovery: a leftover flag means the last run never restored — force visible now.
             if (File.Exists(FlagFile))
             {
-                if (bool.TryParse(File.ReadAllText(FlagFile), out bool recorded))
-                {
-                    _originalVisible = recorded;
-                }
-                DesktopIconHider.SetIconsVisible(_originalVisible);
+                DesktopIconHider.SetIconsVisible(true);
                 File.Delete(FlagFile);
             }
 
-            // 2. Record the real current state, then hide.
-            _originalVisible = DesktopIconHider.AreIconsVisible();
-            File.WriteAllText(FlagFile, _originalVisible.ToString());
+            // Arm the flag, then hide.
+            File.WriteAllText(FlagFile, "hidden");
             DesktopIconHider.SetIconsVisible(false);
         }
         catch
@@ -46,13 +41,12 @@ public static class DesktopShell
         }
     }
 
-    /// <summary>Call on shutdown (Exit + ProcessExit). Restores the original state, clears the flag.
-    /// Idempotent — safe to call multiple times.</summary>
+    /// <summary>Always restores icons to visible (idempotent; safe to call multiple times).</summary>
     public static void Shutdown()
     {
         try
         {
-            DesktopIconHider.SetIconsVisible(_originalVisible);
+            DesktopIconHider.SetIconsVisible(true);
             if (File.Exists(FlagFile)) File.Delete(FlagFile);
         }
         catch
