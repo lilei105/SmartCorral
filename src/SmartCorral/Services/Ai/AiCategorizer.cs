@@ -7,8 +7,8 @@ using System.Threading.Tasks;
 
 namespace SmartCorral.Services.Ai;
 
-/// <summary>A desktop file the LLM will categorize.</summary>
-public sealed record FileDescriptor(string FullPath, string DisplayName, string Ext);
+/// <summary>A desktop item (file or folder) the LLM will categorize.</summary>
+public sealed record FileDescriptor(string FullPath, string DisplayName, string Ext, bool IsFolder);
 
 /// <summary>Text-first categorization: one batched LLM call maps each file (by 1-based index) to a category.</summary>
 public static class AiCategorizer
@@ -21,7 +21,8 @@ public static class AiCategorizer
         "Reply ONLY with JSON: {\"assignments\":[{\"index\":<number>,\"category\":\"<category>\"}]}. " +
         "'index' is the file's number from the list. Provide ONE entry for EVERY number. " +
         "Category names: concise, in the SAME language as the file names (Chinese if the names " +
-        "are Chinese, otherwise English). No commentary.";
+        "are Chinese, otherwise English). The list may contain both files and folders " +
+        "(folders are marked [文件夹]); categorize all of them. No commentary.";
 
     public static async Task<Dictionary<int, string>> CategorizeAsync(
         LlmClient llm, IReadOnlyList<FileDescriptor> files)
@@ -29,8 +30,10 @@ public static class AiCategorizer
         var result = new Dictionary<int, string>();
         if (files.Count == 0) return result;
 
-        string user = "Categorize these desktop files (reply JSON only):\n" +
-                      string.Join("\n", files.Select((f, i) => $"{i + 1}. {f.DisplayName} (.{f.Ext})"));
+        string user = "Categorize these desktop items (reply JSON only):\n" +
+                      string.Join("\n", files.Select((f, i) => f.IsFolder
+                          ? $"{i + 1}. {f.DisplayName} [文件夹]"
+                          : $"{i + 1}. {f.DisplayName} (.{f.Ext})"));
 
         string? content = await llm.ChatJsonAsync(SystemPrompt, user);
 

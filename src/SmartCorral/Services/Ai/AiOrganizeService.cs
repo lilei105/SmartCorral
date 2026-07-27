@@ -21,8 +21,8 @@ public static class AiOrganizeService
                           (!string.IsNullOrWhiteSpace(settings.AiApiKey) || IsLocalEndpoint(settings.AiBaseUrl));
         if (!configured) return;
 
-        // 1. Scan desktop (no COM) off-thread.
-        var allFiles = await Task.Run(DesktopScanner.ScanFiles);
+        // 1. Scan desktop (files + folders, no COM) off-thread.
+        var allFiles = await Task.Run(DesktopScanner.Scan);
 
         // 2. Skip files already imported into a frame.
         var existing = new HashSet<string>(frames.AllItemSourcePaths(), StringComparer.OrdinalIgnoreCase);
