@@ -11,6 +11,8 @@ using SmartCorral.Models;
 using SmartCorral.Services;
 using SmartCorral.Services.Com;
 using SmartCorral.Services.Platform;
+using SmartCorral.Interop;
+using System.Windows.Interop;
 
 // Resolve WPF drag/drop types (WinForms is removed from implicit usings, but keep these explicit).
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -143,6 +145,7 @@ public partial class FrameWindow
             Tag = item
         };
         btn.Click += Item_Click;
+        btn.PreviewMouseRightButtonUp += Item_RightClick;
         return btn;
     }
 
@@ -159,6 +162,20 @@ public partial class FrameWindow
             {
                 // ignore launch failures for now
             }
+        }
+    }
+
+    private void Item_RightClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Button b && b.Tag is FrameItem item && !string.IsNullOrEmpty(item.SourcePath))
+        {
+            // Show the real Windows shell context menu for the original desktop item.
+            Point pt = PointToScreen(e.GetPosition(this));
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            int px = (int)pt.X;
+            int py = (int)pt.Y;
+            ShellContextMenu.Show(item.SourcePath, hwnd, px, py);
+            e.Handled = true; // prevent the frame's own context menu from also showing
         }
     }
 
@@ -197,8 +214,10 @@ public partial class FrameWindow
         if (_dragging)
         {
             Point cur = PointToScreen(e.GetPosition(this));
-            double nl = _dragOriginLeft + (cur.X - _dragOriginScreen.X);
-            double nt = _dragOriginTop + (cur.Y - _dragOriginScreen.Y);
+            double dx = (cur.X - _dragOriginScreen.X) / MonitorService.DpiScaleX;
+            double dy = (cur.Y - _dragOriginScreen.Y) / MonitorService.DpiScaleY;
+            double nl = _dragOriginLeft + dx;
+            double nt = _dragOriginTop + dy;
             var (sx, sy, snapX, snapY) = Snap(nl, nt);
             Left = sx;
             Top = sy;
@@ -209,8 +228,10 @@ public partial class FrameWindow
         else if (_resizing)
         {
             Point cur = PointToScreen(e.GetPosition(this));
-            double rawRight = _resizeStartLeft + _resizeStartWidth + (cur.X - _resizeStartScreen.X);
-            double rawBottom = _resizeStartTop + _resizeStartHeight + (cur.Y - _resizeStartScreen.Y);
+            double dx = (cur.X - _resizeStartScreen.X) / MonitorService.DpiScaleX;
+            double dy = (cur.Y - _resizeStartScreen.Y) / MonitorService.DpiScaleY;
+            double rawRight = _resizeStartLeft + _resizeStartWidth + dx;
+            double rawBottom = _resizeStartTop + _resizeStartHeight + dy;
             var (sr, sb, snapR, snapB) = SnapResize(rawRight, rawBottom);
             double newW = System.Math.Max(MinWidth, sr - Left);
             double newH = System.Math.Max(MinHeight, sb - Top);
