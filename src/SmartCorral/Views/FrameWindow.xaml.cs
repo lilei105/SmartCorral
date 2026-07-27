@@ -93,7 +93,7 @@ public partial class FrameWindow
     {
         var icon = new Image
         {
-            Source = IconService.GetIcon(item.Target),
+            Source = IconService.GetIcon(ShortcutService.AbsolutePath(item.Filename)),
             Width = 32,
             Height = 32,
             HorizontalAlignment = HorizontalAlignment.Center
