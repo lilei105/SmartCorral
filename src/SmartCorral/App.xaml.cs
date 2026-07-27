@@ -10,7 +10,7 @@ namespace SmartCorral;
 public partial class App : Application
 {
     private TrayShell? _tray;
-    private FrameWindow? _frame;
+    private FrameManager? _frames;
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
@@ -24,13 +24,14 @@ public partial class App : Application
         // 2. Tray (so the app has a presence without a main window)
         _tray = new TrayShell();
 
-        // 3. Show the first frame ("hello frame")
-        _frame = new FrameWindow();
-        _frame.Show();
+        // 3. Load frames + show windows
+        _frames = new FrameManager();
+        _frames.Initialize();
     }
 
     private void App_OnExit(object sender, ExitEventArgs e)
     {
+        _frames?.Persist();
         _tray?.Dispose();
     }
 }

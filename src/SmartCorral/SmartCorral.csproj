@@ -12,4 +12,11 @@
     <Version>0.1.0</Version>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- WinForms is enabled only for the tray (TrayShell.cs imports it explicitly).
+         Keep it OUT of global implicit usings so it never clashes with WPF types. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
 </Project>

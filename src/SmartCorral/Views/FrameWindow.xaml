@@ -7,9 +7,12 @@
         Background="Transparent"
         ShowInTaskbar="False"
         Topmost="True"
-        Width="380" Height="200"
+        Width="380" Height="240"
         ResizeMode="CanResizeWithGrip"
         FontFamily="Segoe UI"
+        AllowDrop="True"
+        Drop="Frame_Drop"
+        DragOver="Frame_DragOver"
         Title="Smart Corral">
 
     <Border x:Name="RootBorder"
@@ -34,7 +37,7 @@
                     CornerRadius="14,14,0,0"
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid Margin="14,0">
-                    <TextBlock Text="Smart Corral"
+                    <TextBlock x:Name="TitleText"
                                FontSize="13" FontWeight="SemiBold"
                                Foreground="#FFE8E8F0"
                                VerticalAlignment="Center" />
@@ -49,13 +52,10 @@
                 </Grid>
             </Border>
 
-            <!-- Body -->
-            <StackPanel Grid.Row="1" Margin="18,14">
-                <TextBlock Text="你好，灵栅" FontSize="18" FontWeight="Bold" Foreground="#FFF3F3F8" />
-                <TextBlock Text="Phase 0 · 把桌面文件拖到这里"
-                           FontSize="12" Foreground="#FFB7B7C6"
-                           Margin="0,6,0,0" />
-            </StackPanel>
+            <!-- Items -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,0,4">
+                <WrapPanel x:Name="IconsPanel" Margin="10" MinWidth="100" />
+            </ScrollViewer>
         </Grid>
     </Border>
 </interop:NonActivatingWindow>
