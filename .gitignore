@@ -1,0 +1,23 @@
+## .NET / Visual Studio
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.idea/
+*.log
+[Bb]uild/
+
+## Rider / VSCode
+.idea/
+.vscode/
+
+## secrets
+appsettings.*.json
+*.pfx
+*.key
+
+## OS
+Thumbs.db
+desktop.ini
+.DS_Store
