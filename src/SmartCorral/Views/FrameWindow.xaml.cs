@@ -85,9 +85,22 @@ public partial class FrameWindow
     public void RenderItems()
     {
         IconsPanel.Children.Clear();
-        foreach (var item in _frame.Items.OrderBy(i => i.DisplayOrder))
+        FoldersPanel.Children.Clear();
+
+        var ordered = _frame.Items.OrderBy(i => i.DisplayOrder).ToList();
+        if (_mgr.SeparateFolders)
         {
-            IconsPanel.Children.Add(BuildItem(item));
+            foreach (var item in ordered.Where(i => !i.IsFolder))
+                IconsPanel.Children.Add(BuildItem(item));
+            foreach (var item in ordered.Where(i => i.IsFolder))
+                FoldersPanel.Children.Add(BuildItem(item));
+            FoldersPanel.Visibility = FoldersPanel.Children.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        }
+        else
+        {
+            foreach (var item in ordered)
+                IconsPanel.Children.Add(BuildItem(item));
+            FoldersPanel.Visibility = Visibility.Collapsed;
         }
     }
 

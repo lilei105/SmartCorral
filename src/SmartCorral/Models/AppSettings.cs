@@ -14,4 +14,7 @@ public class AppSettings
 
     /// <summary>How many icons fit in one frame row (2–8). Frame width derives from this.</summary>
     public int IconsPerRow { get; set; } = 3;
+
+    /// <summary>Render folders on their own row below files within each frame.</summary>
+    public bool SeparateFolders { get; set; } = true;
 }

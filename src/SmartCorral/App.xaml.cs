@@ -34,6 +34,7 @@ public partial class App : Application
         // 4. Load frames + show windows
         _frames = new FrameManager();
         _frames.IconsPerRow = _settings.IconsPerRow;
+        _frames.SeparateFolders = _settings.SeparateFolders;
         _frames.Initialize();
 
         // 5. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
@@ -57,7 +58,9 @@ public partial class App : Application
         if (ok == true && _frames != null)
         {
             _frames.IconsPerRow = _settings.IconsPerRow;
+            _frames.SeparateFolders = _settings.SeparateFolders;
             _frames.SizeFramesToContent();
+            _frames.RefreshAll();
             _frames.ArrangeAll();
         }
     }

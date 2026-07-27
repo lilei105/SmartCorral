@@ -17,6 +17,9 @@ public class FrameManager
 
     /// <summary>Icons per frame row (from settings); frames size to this.</summary>
     public int IconsPerRow { get; set; } = 3;
+
+    /// <summary>Render folders on a separate row within each frame.</summary>
+    public bool SeparateFolders { get; set; } = true;
     private readonly System.Collections.Generic.Dictionary<System.Guid, FrameWindow> _windows = new();
 
     public void Initialize()
@@ -84,7 +87,7 @@ public class FrameManager
     public void AddFrame()
     {
         int cols = System.Math.Clamp(IconsPerRow, 2, 8);
-        var f = new DataFrame { Title = "New Frame", X = 220, Y = 220, Width = FrameSizer.WidthForColumns(cols), Height = FrameSizer.HeightFor(0, cols) };
+        var f = new DataFrame { Title = "New Frame", X = 220, Y = 220, Width = FrameSizer.WidthForColumns(cols), Height = FrameSizer.HeightFor(0, 0, cols) };
         Data.Frames.Add(f);
         Open(f);
         Persist();
@@ -146,9 +149,25 @@ public class FrameManager
         foreach (var f in Data.Frames.OfType<DataFrame>().ToList())
         {
             f.Width = FrameSizer.WidthForColumns(cols);
-            f.Height = FrameSizer.HeightFor(f.Items.Count, cols);
+            int files, folders;
+            if (SeparateFolders)
+            {
+                files = f.Items.Count(i => !i.IsFolder);
+                folders = f.Items.Count(i => i.IsFolder);
+            }
+            else
+            {
+                files = f.Items.Count; // all items share one panel when mixed
+                folders = 0;
+            }
+            f.Height = FrameSizer.HeightFor(files, folders, cols);
             if (_windows.TryGetValue(f.Id, out var win)) { win.Width = f.Width; win.Height = f.Height; }
         }
+    }
+
+    public void RefreshAll()
+    {
+        foreach (var win in _windows.Values) win.RenderItems();
     }
 
     /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>

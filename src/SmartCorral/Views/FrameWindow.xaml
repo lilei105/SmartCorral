@@ -70,7 +70,10 @@
 
             <!-- Items -->
             <ScrollViewer x:Name="ItemsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,0,4">
-                <WrapPanel x:Name="IconsPanel" Margin="10" MinWidth="100" />
+                <StackPanel x:Name="ContentStack" Margin="10">
+                    <WrapPanel x:Name="IconsPanel" MinWidth="100" />
+                    <WrapPanel x:Name="FoldersPanel" MinWidth="100" Margin="0,8,0,0" Visibility="Collapsed" />
+                </StackPanel>
             </ScrollViewer>
 
             <!-- Custom resize grip (bottom-right): magnetic snap + guide lines, like the title drag. -->

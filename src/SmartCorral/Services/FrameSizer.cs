@@ -19,11 +19,13 @@ public static class FrameSizer
 
     public static double WidthForColumns(int columns) => Math.Max(2, columns) * PerItemWidth + WidthOverhead;
 
-    public static double HeightFor(int itemCount, int columns)
+    public static double HeightFor(int fileCount, int folderCount, int columns)
     {
         int cols = Math.Max(1, columns);
-        int rows = (int)Math.Ceiling(itemCount / (double)cols);
-        double h = Chrome + rows * RowPitchY;
+        int fileRows = (int)Math.Ceiling(fileCount / (double)cols);
+        int folderRows = folderCount > 0 ? (int)Math.Ceiling(folderCount / (double)cols) : 0;
+        double gap = folderRows > 0 ? 12 : 0;
+        double h = Chrome + (fileRows + folderRows) * RowPitchY + gap;
         return Math.Clamp(h, MinHeight, MaxHeight);
     }
 }
