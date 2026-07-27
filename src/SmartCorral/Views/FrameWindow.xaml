@@ -10,7 +10,7 @@
         Width="380" Height="240"
         MinWidth="180"
         MinHeight="120"
-        ResizeMode="CanResizeWithGrip"
+        ResizeMode="CanResize"
         FontFamily="Segoe UI"
         AllowDrop="True"
         Drop="Frame_Drop"
@@ -72,6 +72,15 @@
             <ScrollViewer x:Name="ItemsScroll" Grid.Row="1" VerticalScrollBarVisibility="Auto" Padding="0,0,0,4">
                 <WrapPanel x:Name="IconsPanel" Margin="10" MinWidth="100" />
             </ScrollViewer>
+
+            <!-- Custom resize grip (bottom-right): magnetic snap + guide lines, like the title drag. -->
+            <Border x:Name="ResizeGrip" Grid.Row="1" Width="16" Height="16"
+                    HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,2"
+                    Background="#33000000" Cursor="SizeNWSE"
+                    MouseLeftButtonDown="ResizeGrip_MouseDown">
+                <TextBlock Text="◢" Foreground="#99FFFFFF" FontSize="9"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
         </Grid>
     </Border>
 </interop:NonActivatingWindow>

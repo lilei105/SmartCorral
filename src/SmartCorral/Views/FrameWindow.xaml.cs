@@ -40,6 +40,11 @@ public partial class FrameWindow
     private double _dragOriginLeft;
     private double _dragOriginTop;
 
+    // custom resize state (bottom-right grip)
+    private bool _resizing;
+    private Point _resizeStartScreen;
+    private double _resizeStartWidth, _resizeStartHeight, _resizeStartLeft, _resizeStartTop;
+
     public FrameWindow(DataFrame frame, FrameManager mgr)
     {
         _frame = frame;
@@ -169,24 +174,74 @@ public partial class FrameWindow
 
     private void Window_MouseMove(object sender, MouseEventArgs e)
     {
-        if (!_dragging) return;
-        Point cur = PointToScreen(e.GetPosition(this));
-        double nl = _dragOriginLeft + (cur.X - _dragOriginScreen.X);
-        double nt = _dragOriginTop + (cur.Y - _dragOriginScreen.Y);
-        var (sx, sy, snapX, snapY) = Snap(nl, nt);
-        Left = sx;
-        Top = sy;
+        if (_dragging)
+        {
+            Point cur = PointToScreen(e.GetPosition(this));
+            double nl = _dragOriginLeft + (cur.X - _dragOriginScreen.X);
+            double nt = _dragOriginTop + (cur.Y - _dragOriginScreen.Y);
+            var (sx, sy, snapX, snapY) = Snap(nl, nt);
+            Left = sx;
+            Top = sy;
 
-        if (snapX) SnapGuide.ShowVertical(sx, sy); else SnapGuide.HideVertical();
-        if (snapY) SnapGuide.ShowHorizontal(sx, sy); else SnapGuide.HideHorizontal();
+            if (snapX) SnapGuide.ShowVertical(sx, sy); else SnapGuide.HideVertical();
+            if (snapY) SnapGuide.ShowHorizontal(sx, sy); else SnapGuide.HideHorizontal();
+        }
+        else if (_resizing)
+        {
+            Point cur = PointToScreen(e.GetPosition(this));
+            double rawRight = _resizeStartLeft + _resizeStartWidth + (cur.X - _resizeStartScreen.X);
+            double rawBottom = _resizeStartTop + _resizeStartHeight + (cur.Y - _resizeStartScreen.Y);
+            var (sr, sb, snapR, snapB) = SnapResize(rawRight, rawBottom);
+            double newW = System.Math.Max(MinWidth, sr - Left);
+            double newH = System.Math.Max(MinHeight, sb - Top);
+            Width = newW;
+            Height = newH;
+
+            // guide lines anchored at the bottom-right corner
+            if (snapR) SnapGuide.ShowVertical(sr, Top + newH); else SnapGuide.HideVertical();
+            if (snapB) SnapGuide.ShowHorizontal(Left + newW, sb); else SnapGuide.HideHorizontal();
+        }
     }
 
     private void Window_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (!_dragging) return;
+        if (!_dragging && !_resizing) return;
         _dragging = false;
+        _resizing = false;
         SnapGuide.Hide();
         ReleaseMouseCapture();
+    }
+
+    private void ResizeGrip_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_frame.IsLocked) return;
+        _resizing = true;
+        _resizeStartScreen = PointToScreen(e.GetPosition(this));
+        _resizeStartWidth = Width;
+        _resizeStartHeight = Height;
+        _resizeStartLeft = Left;
+        _resizeStartTop = Top;
+        CaptureMouse();
+    }
+
+    private (double right, double bottom, bool snapR, bool snapB) SnapResize(double right, double bottom)
+    {
+        Rect work = MonitorService.WorkAreaForPoint(Left, Top);
+        var xs = new List<double> { work.Right, work.Right - SnapGap };
+        var ys = new List<double> { work.Bottom, work.Bottom - SnapGap };
+        foreach (var r in _mgr.GetOpenFrameBounds(_frame.Id))
+        {
+            xs.Add(r.Right); xs.Add(r.Left); xs.Add(r.Left - SnapGap);
+            ys.Add(r.Bottom); ys.Add(r.Top); ys.Add(r.Top - SnapGap);
+        }
+
+        double bestR = right, bestDR = SnapThreshold;
+        foreach (double c in xs) { double d = System.Math.Abs(right - c); if (d < bestDR) { bestDR = d; bestR = c; } }
+
+        double bestB = bottom, bestDB = SnapThreshold;
+        foreach (double c in ys) { double d = System.Math.Abs(bottom - c); if (d < bestDB) { bestDB = d; bestB = c; } }
+
+        return (bestR, bestB, bestDR < SnapThreshold, bestDB < SnapThreshold);
     }
 
     private (double x, double y, bool snapX, bool snapY) Snap(double left, double top)
@@ -270,7 +325,7 @@ public partial class FrameWindow
     // ---- chrome helpers ----
     private void ApplyLockState()
     {
-        ResizeMode = _frame.IsLocked ? ResizeMode.NoResize : ResizeMode.CanResizeWithGrip;
+        ResizeGrip.Visibility = _frame.IsLocked ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void ToggleRoll()

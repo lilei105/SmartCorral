@@ -14,6 +14,9 @@ namespace SmartCorral.Services;
 public class FrameManager
 {
     public AppData Data { get; private set; } = new();
+
+    /// <summary>Icons per frame row (from settings); frames size to this.</summary>
+    public int IconsPerRow { get; set; } = 3;
     private readonly System.Collections.Generic.Dictionary<System.Guid, FrameWindow> _windows = new();
 
     public void Initialize()
@@ -80,7 +83,8 @@ public class FrameManager
 
     public void AddFrame()
     {
-        var f = new DataFrame { Title = "New Frame", X = 220, Y = 220, Width = 360, Height = 240 };
+        int cols = System.Math.Clamp(IconsPerRow, 2, 8);
+        var f = new DataFrame { Title = "New Frame", X = 220, Y = 220, Width = FrameSizer.WidthForColumns(cols), Height = FrameSizer.HeightFor(0, cols) };
         Data.Frames.Add(f);
         Open(f);
         Persist();
@@ -127,7 +131,7 @@ public class FrameManager
             Title = category,
             X = 120,
             Y = 120,
-            Width = FrameSizer.DefaultWidth,
+            Width = FrameSizer.WidthForColumns(System.Math.Clamp(IconsPerRow, 2, 8)),
             Height = 200
         };
         Data.Frames.Add(f);
@@ -138,10 +142,11 @@ public class FrameManager
     /// <summary>Resizes every frame's height to fit its items (no scroll). Call after items change.</summary>
     public void SizeFramesToContent()
     {
+        int cols = System.Math.Clamp(IconsPerRow, 2, 8);
         foreach (var f in Data.Frames.OfType<DataFrame>().ToList())
         {
-            f.Width = FrameSizer.DefaultWidth;
-            f.Height = FrameSizer.HeightFor(f.Items.Count, f.Width);
+            f.Width = FrameSizer.WidthForColumns(cols);
+            f.Height = FrameSizer.HeightFor(f.Items.Count, cols);
             if (_windows.TryGetValue(f.Id, out var win)) { win.Width = f.Width; win.Height = f.Height; }
         }
     }

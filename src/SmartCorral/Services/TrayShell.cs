@@ -25,7 +25,7 @@ public sealed class TrayShell : IDisposable
         };
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("AI Settings…", null, (_, _) => onOpenSettings());
+        menu.Items.Add("设置 / Settings", null, (_, _) => onOpenSettings());
         menu.Items.Add("Auto-arrange", null, (_, _) => onAutoArrange());
         menu.Items.Add("重新整理全部 / Re-organize all", null, (_, _) => onReorganizeAll());
         menu.Items.Add("-");

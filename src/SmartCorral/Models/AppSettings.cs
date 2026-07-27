@@ -11,4 +11,7 @@ public class AppSettings
 
     /// <summary>Chat model id, e.g. gpt-4o-mini, deepseek-chat.</summary>
     public string AiModel { get; set; } = "gpt-4o-mini";
+
+    /// <summary>How many icons fit in one frame row (2–8). Frame width derives from this.</summary>
+    public int IconsPerRow { get; set; } = 3;
 }

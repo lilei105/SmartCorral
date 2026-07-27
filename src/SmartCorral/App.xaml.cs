@@ -33,6 +33,7 @@ public partial class App : Application
 
         // 4. Load frames + show windows
         _frames = new FrameManager();
+        _frames.IconsPerRow = _settings.IconsPerRow;
         _frames.Initialize();
 
         // 5. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
@@ -52,7 +53,13 @@ public partial class App : Application
     private void OpenSettings()
     {
         var w = new SettingsWindow(_settings) { Owner = null };
-        w.ShowDialog();
+        bool? ok = w.ShowDialog();
+        if (ok == true && _frames != null)
+        {
+            _frames.IconsPerRow = _settings.IconsPerRow;
+            _frames.SizeFramesToContent();
+            _frames.ArrangeAll();
+        }
     }
 
     private void ReorganizeAll()
