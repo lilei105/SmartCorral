@@ -90,6 +90,14 @@ public partial class App : Application
     private void ReorganizeAll()
     {
         Logger.Info("Tray: 'AI re-categorize' requested.");
+        // Gate the DESTRUCTIVE step (ClearAll) on AI being configured — checked BEFORE ClearAll, not
+        // inside RunAsync, so an unconfigured AI never wipes the user's current frames for nothing.
+        if (!AiOrganizeService.IsConfigured(_settings))
+        {
+            Logger.Warn("ReorganizeAll: AI not configured — aborting before ClearAll (frames left intact).");
+            _tray?.Balloon("AI 未配置", "请先在「设置」里填好 Base URL / API Key / Model，再点重新归类。", warn: true);
+            return;
+        }
         // Tell the user it's working right away — the LLM call + filing can take ~10–15 s, which
         // otherwise reads as "nothing happened".
         _tray?.Balloon("AI 分类中", "正在用 AI 重新分类桌面（约 10–15 秒）…");

@@ -21,8 +21,7 @@ public static class AiOrganizeService
     public static async Task RunAsync(FrameManager frames, AppSettings settings, Action<string, bool>? onResult = null)
     {
         bool hasKey = !string.IsNullOrWhiteSpace(settings.AiApiKey);
-        bool configured = !string.IsNullOrWhiteSpace(settings.AiModel) &&
-                          (hasKey || IsLocalEndpoint(settings.AiBaseUrl));
+        bool configured = IsConfigured(settings);
         Logger.Info($"AI organize start: configured={configured} (model='{settings.AiModel}', key={(hasKey ? "set" : "missing")}, base='{settings.AiBaseUrl}')");
         if (!configured)
         {
@@ -100,6 +99,15 @@ public static class AiOrganizeService
             dispatcher.InvokeAsync(() => onResult(message, isError));
         else
             onResult(message, isError);
+    }
+
+    /// <summary>True if AI is usable: a model is set AND either an API key is set OR the endpoint is
+    /// local/no-auth (e.g. Ollama). Used to gate destructive actions (tray "re-categorize") BEFORE they
+    /// wipe the user's current organization — so an unconfigured AI never clears your frames for nothing.</summary>
+    public static bool IsConfigured(AppSettings settings)
+    {
+        bool hasKey = !string.IsNullOrWhiteSpace(settings.AiApiKey);
+        return !string.IsNullOrWhiteSpace(settings.AiModel) && (hasKey || IsLocalEndpoint(settings.AiBaseUrl));
     }
 
     private static bool IsLocalEndpoint(string url)
