@@ -86,28 +86,37 @@ public static class SnapGuide
         };
     }
 
-    /// <summary>Short vertical line at screenX, centered on screenAnchorY.</summary>
-    public static void ShowVertical(double screenX, double screenAnchorY)
+    /// <summary>Short vertical line at physicalX, centered on physicalAnchorY.</summary>
+    public static void ShowVertical(double physicalX, double physicalAnchorY)
     {
         Ensure();
-        if (_vline == null) return;
-        double x = screenX - SystemParameters.VirtualScreenLeft;
-        double cy = screenAnchorY - SystemParameters.VirtualScreenTop;
+        if (_win == null || _vline == null) return;
+        var (x, cy) = ToCanvas(physicalX, physicalAnchorY);
         _vline.X1 = x; _vline.X2 = x;
         _vline.Y1 = cy - Extent; _vline.Y2 = cy + Extent;
         _vline.Visibility = Visibility.Visible;
     }
 
-    /// <summary>Short horizontal line at screenY, centered on screenAnchorX.</summary>
-    public static void ShowHorizontal(double screenAnchorX, double screenY)
+    /// <summary>Short horizontal line at physicalY, centered on physicalAnchorX.</summary>
+    public static void ShowHorizontal(double physicalAnchorX, double physicalY)
     {
         Ensure();
-        if (_hline == null) return;
-        double cx = screenAnchorX - SystemParameters.VirtualScreenLeft;
-        double y = screenY - SystemParameters.VirtualScreenTop;
+        if (_win == null || _hline == null) return;
+        var (cx, y) = ToCanvas(physicalAnchorX, physicalY);
         _hline.Y1 = y; _hline.Y2 = y;
         _hline.X1 = cx - Extent; _hline.X2 = cx + Extent;
         _hline.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Physical pixels → overlay-canvas DIP. The overlay spans the whole virtual screen at
+    /// the PRIMARY monitor's DPI, so DIP values from a frame on another-DPI monitor misalign;
+    /// converting via the overlay's own origin (PointToScreen) + DPI is correct on every monitor.
+    /// </summary>
+    private static (double x, double y) ToCanvas(double physicalX, double physicalY)
+    {
+        Point origin = _win!.PointToScreen(new Point(0, 0));
+        DpiScale dpi = VisualTreeHelper.GetDpi(_win);
+        return ((physicalX - origin.X) / dpi.DpiScaleX, (physicalY - origin.Y) / dpi.DpiScaleY);
     }
 
     public static void HideVertical() { if (_vline != null) _vline.Visibility = Visibility.Collapsed; }

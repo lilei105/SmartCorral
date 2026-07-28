@@ -39,6 +39,7 @@ public partial class FrameWindow
     // custom drag state
     private bool _dragging;
     private Point _dragOriginScreen;
+    private Point _dragOriginScreenTL; // physical top-left at drag start (for snap-guide anchoring)
     private double _dragOriginLeft;
     private double _dragOriginTop;
 
@@ -206,6 +207,7 @@ public partial class FrameWindow
         _dragOriginLeft = Left;
         _dragOriginTop = Top;
         _dragOriginScreen = PointToScreen(e.GetPosition(this));
+        _dragOriginScreenTL = PointToScreen(new Point(0, 0));
         CaptureMouse();
     }
 
@@ -225,8 +227,13 @@ public partial class FrameWindow
             Left = sx;
             Top = sy;
 
-            if (snapX) SnapGuide.ShowVertical(sx, sy); else SnapGuide.HideVertical();
-            if (snapY) SnapGuide.ShowHorizontal(sx, sy); else SnapGuide.HideHorizontal();
+            // Guide overlay canvas uses the PRIMARY monitor's DPI, so pass PHYSICAL pixels: frame
+            // Left/Top are in THIS monitor's own DIP space, and DIP would misalign on other screens.
+            // Anchor on the frame's top-left edge — NOT the click point (_dragOriginScreen).
+            double physLeft = _dragOriginScreenTL.X + (sx - _dragOriginLeft) * dpi.DpiScaleX;
+            double physTop = _dragOriginScreenTL.Y + (sy - _dragOriginTop) * dpi.DpiScaleY;
+            if (snapX) SnapGuide.ShowVertical(physLeft, physTop); else SnapGuide.HideVertical();
+            if (snapY) SnapGuide.ShowHorizontal(physLeft, physTop); else SnapGuide.HideHorizontal();
         }
         else if (_resizing)
         {
@@ -242,9 +249,13 @@ public partial class FrameWindow
             Width = newW;
             Height = newH;
 
-            // guide lines anchored at the bottom-right corner
-            if (snapR) SnapGuide.ShowVertical(sr, Top + newH); else SnapGuide.HideVertical();
-            if (snapB) SnapGuide.ShowHorizontal(Left + newW, sb); else SnapGuide.HideHorizontal();
+            // guide lines anchored at the bottom-right corner (physical pixels — see drag note).
+            // Left/Top are unchanged during resize, so the frame's physical top-left is reliable here.
+            Point physTL = PointToScreen(new Point(0, 0));
+            double physRight = physTL.X + newW * dpi.DpiScaleX;
+            double physBottom = physTL.Y + newH * dpi.DpiScaleY;
+            if (snapR) SnapGuide.ShowVertical(physRight, physBottom); else SnapGuide.HideVertical();
+            if (snapB) SnapGuide.ShowHorizontal(physRight, physBottom); else SnapGuide.HideHorizontal();
         }
     }
 
