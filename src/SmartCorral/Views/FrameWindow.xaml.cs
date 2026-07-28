@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -57,6 +58,12 @@ public partial class FrameWindow
     private bool _resizing;
     private Point _resizeStartScreen;
     private double _resizeStartWidth, _resizeStartHeight, _resizeStartLeft, _resizeStartTop;
+
+    // item drag-out state: drag an icon out of a frame → release to desktop/Explorer, or re-categorize
+    // to another frame. A drag is distinct from a click (must move past the system drag threshold).
+    private Point _itemDragStart;
+    private FrameItem? _itemDragItem;
+    private const string FrameItemDragFormat = "SmartCorralFrameItem";
 
     public FrameWindow(DataFrame frame, FrameManager mgr)
     {
@@ -117,6 +124,13 @@ public partial class FrameWindow
                 IconsPanel.Children.Add(BuildItem(item));
             FoldersPanel.Visibility = Visibility.Collapsed;
         }
+
+        // Force a layout pass now. Rebuilding a Panel's Children from a Dispatcher callback (e.g. the
+        // desktop watcher's auto-file) doesn't always reflow on its own — without this the new icon is
+        // in the logical tree but not positioned until something else (a resize, a roll toggle) forces
+        // layout. UpdateLayout guarantees it shows immediately.
+        IconsPanel.UpdateLayout();
+        FoldersPanel.UpdateLayout();
     }
 
     private UIElement BuildItem(FrameItem item)
@@ -159,6 +173,8 @@ public partial class FrameWindow
         };
         btn.Click += Item_Click;
         btn.PreviewMouseRightButtonUp += Item_RightClick;
+        btn.PreviewMouseLeftButtonDown += Item_DragStart;
+        btn.MouseMove += Item_MouseMove;
         return btn;
     }
 
@@ -182,53 +198,107 @@ public partial class FrameWindow
     {
         if (sender is Button b && b.Tag is FrameItem item)
         {
-            ShowItemMenu(item, e);
-            e.Handled = true; // prevent the frame's own context menu from also showing
-        }
-    }
-
-    /// <summary>Per-item right-click menu: a non-destructive "Remove" (restores the file to the desktop)
-    /// plus "More" for the full native shell menu. The shell menu targets the item's CURRENT on-disk path
-    /// (its custody copy via LivePath) — NOT SourcePath, which is empty once the item is custodied.</summary>
-    private void ShowItemMenu(FrameItem item, MouseButtonEventArgs e)
-    {
-        // Capture the physical cursor position now for the native menu (fired later from a Click handler).
-        Point pt = PointToScreen(e.GetPosition(this));
-        IntPtr hwnd = new WindowInteropHelper(this).Handle;
-        int px = (int)pt.X, py = (int)pt.Y;
-
-        var menu = new ContextMenu();
-
-        var miRemove = new MenuItem { Header = "移除（还原到桌面）/ Remove" };
-        miRemove.Click += (_, _) => _mgr.RemoveItem(_frame, item);
-
-        var miMore = new MenuItem { Header = "更多（系统右键菜单）/ More…" };
-        miMore.Click += (_, _) =>
-        {
+            // The genuine Windows shell context menu for the item's CURRENT on-disk path (its custody
+            // copy via LivePath — NOT SourcePath, which is empty once the item is custodied). Nothing
+            // custom added: right-click an icon = the same menu you'd get in Explorer.
             string? target = item.LivePath;
             if (string.IsNullOrEmpty(target)) target = item.Target;
             if (string.IsNullOrEmpty(target)) target = item.SourcePath;
             if (!string.IsNullOrEmpty(target))
-                ShellContextMenu.Show(target, hwnd, px, py);
-        };
+            {
+                Point pt = PointToScreen(e.GetPosition(this));
+                IntPtr hwnd = new WindowInteropHelper(this).Handle;
+                ShellContextMenu.Show(target, hwnd, (int)pt.X, (int)pt.Y);
 
-        menu.Items.Add(miRemove);
-        menu.Items.Add(new Separator());
-        menu.Items.Add(miMore);
+                // The shell menu is modal — by the time it returns, a destructive choice (Delete/Cut/
+                // Move) has removed or moved the custody copy. If it's gone, drop the item from the
+                // frame (and its custody entry) so we don't leave a dead icon pointing at a gone file.
+                // Non-destructive choices (Open/Properties) leave the file in place → item stays.
+                bool stillThere = File.Exists(target) || Directory.Exists(target);
+                if (!stillThere)
+                {
+                    Logger.Info($"Item right-click: '{item.DisplayName}' gone after shell menu — removing from frame.");
+                    _mgr.RemoveItem(_frame, item);
+                }
+            }
+            e.Handled = true; // prevent the frame's own context menu from also showing
+        }
+    }
 
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        menu.IsOpen = true;
+    // ---- drag an item OUT of a frame (release / re-categorize) ----
+
+    private void Item_DragStart(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is Button b && b.Tag is FrameItem item)
+        {
+            _itemDragStart = e.GetPosition(null);
+            _itemDragItem = item;
+        }
+    }
+
+    private void Item_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (_itemDragItem == null) return;
+        if (e.LeftButton != MouseButtonState.Pressed) { _itemDragItem = null; return; }
+
+        Point pos = e.GetPosition(null);
+        if (System.Math.Abs(pos.X - _itemDragStart.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            System.Math.Abs(pos.Y - _itemDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+            return;
+
+        var item = _itemDragItem;
+        _itemDragItem = null; // a drag started — the click is now suppressed
+
+        string? custodyPath = item.LivePath;
+        if (string.IsNullOrEmpty(custodyPath)) custodyPath = item.Target;
+        if (string.IsNullOrEmpty(custodyPath)) custodyPath = item.SourcePath;
+        if (string.IsNullOrEmpty(custodyPath)) return;
+
+        // Two payloads so the DROP TARGET decides the meaning:
+        //   • another SmartCorral frame → FrameItemDragFormat → re-categorize (custody stays put)
+        //   • Explorer (desktop/folder)  → FileDrop            → Explorer moves the file out → release
+        var data = new DataObject();
+        data.SetData(FrameItemDragFormat, item);
+        data.SetData(DataFormats.FileDrop, new[] { custodyPath });
+
+        DragDrop.DoDragDrop((DependencyObject)sender, data, DragDropEffects.Move | DragDropEffects.Copy);
+
+        // After the drop: if the custody copy is gone, the user dropped on Explorer (release) — remove
+        // the item from the frame. Re-categorize to another frame leaves custody in place → no-op here.
+        if (!File.Exists(custodyPath) && !Directory.Exists(custodyPath))
+        {
+            Logger.Info($"Drag-out: '{item.DisplayName}' released to Explorer — removing from frame.");
+            _mgr.RemoveItem(_frame, item);
+        }
     }
 
     // ---- drag/drop of files ----
     private void Frame_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+        if (e.Data.GetDataPresent(FrameItemDragFormat))
+            e.Effects = DragDropEffects.Move;         // re-categorize from another frame
+        else if (e.Data.GetDataPresent(DataFormats.FileDrop))
+            e.Effects = DragDropEffects.Copy;          // external file drop (or our own drag released onto Explorer)
+        else
+            e.Effects = DragDropEffects.None;
         e.Handled = true;
     }
 
     private void Frame_Drop(object sender, DragEventArgs e)
     {
+        // Internal re-categorize: an icon dragged from another (or this) frame → move it here. Custody
+        // is untouched; only the item's frame membership changes. (Dropping back on the same frame = no-op.)
+        if (e.Data.GetData(FrameItemDragFormat) is FrameItem dragged)
+        {
+            if (_mgr.MoveItem(_frame, dragged))
+            {
+                e.Effects = DragDropEffects.Move;
+                RenderItems();
+            }
+            e.Handled = true;
+            return;
+        }
+
         if (e.Data.GetDataPresent(DataFormats.FileDrop))
         {
             var files = (string[])e.Data.GetData(DataFormats.FileDrop);

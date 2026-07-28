@@ -84,6 +84,12 @@ public static class IconService
     private static readonly Dictionary<string, ImageSource> _cache =
         new(StringComparer.OrdinalIgnoreCase);
 
+    /// <summary>Drop all cached icons. Call after something changes what a cached path points at —
+    /// e.g. RetakeAllIntoCustody re-points wrapper .lnk targets to fresh custody paths, so the icon
+    /// cached against the old (now-empty) target (which fell back to the arrowed .lnk icon) must be
+    /// discarded, or raw files would wrongly show the shortcut arrow.</summary>
+    public static void ClearCache() => _cache.Clear();
+
     /// <summary>Icon for a shortcut file (.lnk/.url).
     /// showArrow: include the shortcut overlay arrow (when the ORIGINAL desktop item was a .lnk);
     /// suppress for raw files/folders we wrapped in a .lnk.</summary>

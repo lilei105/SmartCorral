@@ -128,6 +128,26 @@ public class FrameManager
         Persist();
     }
 
+    /// <summary>Re-categorize by drag: moves a FrameItem from whichever frame currently owns it into
+    /// <paramref name="target"/>. The custody copy is UNTOUCHED — only the item's frame membership
+    /// changes. Returns false (no-op) if the item isn't filed anywhere or already lives in target.</summary>
+    public bool MoveItem(DataFrame target, FrameItem item)
+    {
+        var source = Data.Frames.OfType<DataFrame>().FirstOrDefault(f => f.Items.Contains(item));
+        if (source == null || source == target) return false;
+
+        source.Items.Remove(item);
+        item.DisplayOrder = target.Items.Count;
+        target.Items.Add(item);
+
+        if (_windows.TryGetValue(source.Id, out var sw)) sw.RenderItems();
+        if (_windows.TryGetValue(target.Id, out var tw)) tw.RenderItems();
+        SizeFramesToContent();
+        Persist();
+        Logger.Info($"Re-categorized '{item.DisplayName}': 「{source.Title}」 -> 「{target.Title}」");
+        return true;
+    }
+
     /// <summary>Re-custodies every already-filed item at launch: RestoreAll put them back on the desktop,
     /// so move each one into a fresh custody path for this session and re-point raw-file wrapper .lnks.
     /// Call after Initialize() and before the windows' icons are relied upon (then RefreshAll).</summary>
@@ -155,6 +175,11 @@ public class FrameManager
                 it.LivePath = it.Target ?? src;
             }
         }
+
+        // Re-pointing the wrapper .lnk targets invalidated any icons cached against them (the startup
+        // render happened while they still pointed at the now-empty previous custody path, so they fell
+        // back to the arrowed .lnk icon). Clear so the next render re-extracts from the fresh target.
+        IconService.ClearCache();
     }
 
     private static void TryDeleteShortcut(string relativeFilename)
