@@ -20,6 +20,10 @@ public class FrameManager
 
     /// <summary>Render folders on a separate row within each frame.</summary>
     public bool SeparateFolders { get; set; } = true;
+
+    /// <summary>Keep frames always-on-top (true) or obey normal z-order so other windows can cover them (false).</summary>
+    public bool ForceTopmost { get; set; } = true;
+
     private readonly System.Collections.Generic.Dictionary<System.Guid, FrameWindow> _windows = new();
 
     public void Initialize()
@@ -50,6 +54,7 @@ public class FrameManager
         win.Width = frame.Width;
         win.Height = frame.Height;
         _windows[frame.Id] = win;
+        win.Topmost = ForceTopmost;
         win.Show();
     }
 
@@ -168,6 +173,12 @@ public class FrameManager
     public void RefreshAll()
     {
         foreach (var win in _windows.Values) win.RenderItems();
+    }
+
+    /// <summary>Applies the current ForceTopmost setting to every open frame window.</summary>
+    public void ApplyTopmost()
+    {
+        foreach (var win in _windows.Values) win.Topmost = ForceTopmost;
     }
 
     /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>

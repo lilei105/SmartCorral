@@ -13,6 +13,7 @@ using SmartCorral.Services.Com;
 using SmartCorral.Services.Platform;
 using SmartCorral.Interop;
 using System.Windows.Interop;
+using System.Runtime.InteropServices;
 
 // Resolve WPF drag/drop types (WinForms is removed from implicit usings, but keep these explicit).
 using DragEventArgs = System.Windows.DragEventArgs;
@@ -29,6 +30,15 @@ public partial class FrameWindow
 {
     private const double SnapThreshold = 10.0;
     private const double SnapGap = 12.0;
+
+    // SetWindowPos flags for raising a frame without activating or making it topmost.
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
     private readonly DataFrame _frame;
     private readonly FrameManager _mgr;
@@ -350,8 +360,19 @@ public partial class FrameWindow
     /// <summary>Re-assert topmost to raise this frame above sibling frames (no focus change).</summary>
     private void BringToFront()
     {
-        Topmost = false;
-        Topmost = true;
+        if (_mgr.ForceTopmost)
+        {
+            Topmost = false;
+            Topmost = true;
+            return;
+        }
+
+        // Not always-on-top: raise this frame to the top of the non-topmost Z-order so it comes
+        // above sibling frames, without activating (preserve NOACTIVATE) or becoming topmost — so
+        // other windows can still cover it when you switch away.
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd != IntPtr.Zero)
+            SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
     // ---- context menu actions ----

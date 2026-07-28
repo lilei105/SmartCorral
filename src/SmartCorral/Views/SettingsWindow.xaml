@@ -15,7 +15,9 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -53,10 +55,13 @@
         <CheckBox Grid.Row="5" x:Name="SeparateFoldersBox" Content="Separate folders onto their own row"
                   FontSize="12" Foreground="#FFE8E8F0" Margin="0,0,0,10" />
 
-        <TextBlock Grid.Row="6" Text="Tip: OpenAI, DeepSeek, Qwen, or local Ollama (http://localhost:11434/v1) all work."
+        <CheckBox Grid.Row="6" x:Name="ForceTopmostBox" Content="Keep frames always on top"
+                  FontSize="12" Foreground="#FFE8E8F0" Margin="0,0,0,10" />
+
+        <TextBlock Grid.Row="7" Text="Tip: OpenAI, DeepSeek, Qwen, or local Ollama (http://localhost:11434/v1) all work."
                    FontSize="10" Foreground="#FF8A8AA0" TextWrapping="Wrap" VerticalAlignment="Bottom" />
 
-        <StackPanel Grid.Row="7" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+        <StackPanel Grid.Row="8" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
             <Button Content="Cancel" Width="90" Height="30" Margin="0,0,8,0" Background="#FF2A2A3C" Foreground="White" BorderBrush="#44FFFFFF" Click="Cancel_Click" />
             <Button Content="Save"   Width="90" Height="30" Background="#FF5B6CFF" Foreground="White" BorderThickness="0" FontWeight="Bold" Click="Save_Click" />
         </StackPanel>

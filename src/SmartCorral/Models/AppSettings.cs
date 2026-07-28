@@ -17,4 +17,7 @@ public class AppSettings
 
     /// <summary>Render folders on their own row below files within each frame.</summary>
     public bool SeparateFolders { get; set; } = true;
+
+    /// <summary>Keep frames always-on-top of other windows. Turn off so other windows can cover them.</summary>
+    public bool ForceTopmost { get; set; } = true;
 }
