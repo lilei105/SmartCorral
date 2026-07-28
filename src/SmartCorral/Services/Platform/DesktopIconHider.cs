@@ -4,12 +4,18 @@ using System.Runtime.InteropServices;
 namespace SmartCorral.Services.Platform;
 
 /// <summary>
-/// Hides/shows the native Windows desktop icons by toggling the desktop SysListView32 window.
-/// Salvaged technique (vetted): Progman -> SHELLDLL_DefView -> SysListView32 (with a WorkerW
-/// fallback for when a wallpaper engine has reparented the desktop view). ShowWindow hides the
-/// whole icon list-view at once — same trick Fences uses. Pure Win32, no dependency.
+/// Hides/shows native desktop icons via the OS "Show desktop icons" toggle — the same one the
+/// desktop right-click → View menu uses — by sending WM_COMMAND 0x7402 to SHELLDLL_DefView.
+/// (0x7402 is the verified Win10/11 command ID; the older 0x7000 does not work on modern builds.)
+///
+/// This keeps the list-view control active (only the icons disappear), so rubber-band
+/// drag-selection on the desktop still works — unlike hiding the SysListView32 window (SW_HIDE),
+/// which removed the whole control and killed drag-select.
+///
+/// The 0x7402 command is a TOGGLE (flips the current state), not a set, so callers must track
+/// absolute state themselves (see DesktopShell's flag-file logic).
 /// </summary>
-public static class DesktopIconHider
+internal static class DesktopIconHider
 {
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr FindWindow(string? lpClassName, string? lpWindowName);
@@ -17,23 +23,23 @@ public static class DesktopIconHider
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr FindWindowEx(IntPtr hwndParent, IntPtr hwndChildAfter, string? lpszClass, string? lpszWindow);
 
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
+
     [DllImport("user32.dll")]
     private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-    [DllImport("user32.dll")]
-    [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool IsWindowVisible(IntPtr hWnd);
-
-    private const int SW_HIDE = 0;
+    private const uint WM_COMMAND = 0x0111;
+    private static readonly IntPtr ToggleDesktopIconsCmd = new(0x7402);
     private const int SW_SHOW = 5;
 
-    /// <summary>Returns the HWND of the desktop icon list-view (SysListView32), or Zero if not found.</summary>
-    public static IntPtr GetDesktopListView()
+    /// <summary>The desktop SHELLDLL_DefView (Progman child, or under a WorkerW when a wallpaper
+    /// engine has reparented the desktop view). Desktop view commands go to this window.</summary>
+    public static IntPtr GetDesktopDefView()
     {
         IntPtr progman = FindWindow("Progman", null);
         IntPtr defView = FindWindowEx(progman, IntPtr.Zero, "SHELLDLL_DefView", null);
 
-        // Fallback: with an active wallpaper engine the desktop view often lives under a WorkerW.
         if (defView == IntPtr.Zero)
         {
             IntPtr workerW = IntPtr.Zero;
@@ -44,23 +50,33 @@ public static class DesktopIconHider
             } while (defView == IntPtr.Zero && workerW != IntPtr.Zero);
         }
 
+        return defView;
+    }
+
+    /// <summary>The desktop icon list-view (SysListView32), child of SHELLDLL_DefView.</summary>
+    public static IntPtr GetDesktopListView()
+    {
+        IntPtr defView = GetDesktopDefView();
         return defView != IntPtr.Zero
             ? FindWindowEx(defView, IntPtr.Zero, "SysListView32", null)
             : IntPtr.Zero;
     }
 
-    public static bool AreIconsVisible()
+    /// <summary>Ensures the list-view window is shown. Undoes any leftover SW_HIDE from the old
+    /// hiding method, so the native toggle below keeps drag-selection working. Idempotent.</summary>
+    public static void ShowDesktopListView()
     {
         IntPtr lv = GetDesktopListView();
-        return lv != IntPtr.Zero && IsWindowVisible(lv);
+        if (lv != IntPtr.Zero) ShowWindow(lv, SW_SHOW);
     }
 
-    public static void SetIconsVisible(bool visible)
+    /// <summary>Toggles the OS "Show desktop icons" setting. Returns true if the command was sent.
+    /// It FLIPS state — pair with DesktopShell's flag-file logic to track absolute state.</summary>
+    public static bool ToggleDesktopIcons()
     {
-        IntPtr lv = GetDesktopListView();
-        if (lv != IntPtr.Zero)
-        {
-            ShowWindow(lv, visible ? SW_SHOW : SW_HIDE);
-        }
+        IntPtr defView = GetDesktopDefView();
+        if (defView == IntPtr.Zero) return false;
+        SendMessage(defView, WM_COMMAND, ToggleDesktopIconsCmd, IntPtr.Zero);
+        return true;
     }
 }
