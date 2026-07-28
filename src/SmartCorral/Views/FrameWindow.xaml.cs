@@ -198,22 +198,19 @@ public partial class FrameWindow
     {
         if (sender is Button b && b.Tag is FrameItem item)
         {
-            // The genuine Windows shell context menu for the item's CURRENT on-disk path (its custody
-            // copy via LivePath — NOT SourcePath, which is empty once the item is custodied). Nothing
-            // custom added: right-click an icon = the same menu you'd get in Explorer.
+            // The shell menu targets the custody copy (LivePath). NEVER fall back to Target (the
+            // resolved exe) — that would let the user delete/move the real program file, not the item.
             string? target = item.LivePath;
-            if (string.IsNullOrEmpty(target)) target = item.Target;
-            if (string.IsNullOrEmpty(target)) target = item.SourcePath;
             if (!string.IsNullOrEmpty(target))
             {
                 Point pt = PointToScreen(e.GetPosition(this));
                 IntPtr hwnd = new WindowInteropHelper(this).Handle;
-                ShellContextMenu.Show(target, hwnd, (int)pt.X, (int)pt.Y);
+                try { ShellContextMenu.Show(target, hwnd, (int)pt.X, (int)pt.Y); }
+                catch (System.Exception ex) { Logger.Error($"Shell menu threw for '{item.DisplayName}'", ex); }
 
                 // The shell menu is modal — by the time it returns, a destructive choice (Delete/Cut/
                 // Move) has removed or moved the custody copy. If it's gone, drop the item from the
-                // frame (and its custody entry) so we don't leave a dead icon pointing at a gone file.
-                // Non-destructive choices (Open/Properties) leave the file in place → item stays.
+                // frame so we don't leave a dead icon. (Also cleans an already-dead link on right-click.)
                 bool stillThere = File.Exists(target) || Directory.Exists(target);
                 if (!stillThere)
                 {
@@ -249,9 +246,9 @@ public partial class FrameWindow
         var item = _itemDragItem;
         _itemDragItem = null; // a drag started — the click is now suppressed
 
+        // Drag the custody copy only — never fall back to Target (the resolved exe): dragging that out
+        // would dump the real program file on the desktop and spawn a stray re-filed copy.
         string? custodyPath = item.LivePath;
-        if (string.IsNullOrEmpty(custodyPath)) custodyPath = item.Target;
-        if (string.IsNullOrEmpty(custodyPath)) custodyPath = item.SourcePath;
         if (string.IsNullOrEmpty(custodyPath)) return;
 
         // Two payloads so the DROP TARGET decides the meaning:

@@ -69,8 +69,17 @@ public class FrameManager
     /// <summary>Drops real files (from the shell) into a frame.</summary>
     public void AddDroppedFiles(DataFrame frame, string[] files)
     {
+        // Skip files already filed (by SourcePath) so a manual drag can't create a duplicate.
+        var existing = new HashSet<string>(AllItemSourcePaths(), System.StringComparer.OrdinalIgnoreCase);
         foreach (string file in files)
+        {
+            if (existing.Contains(file))
+            {
+                Logger.Info($"AddDroppedFiles: skip already-filed '{System.IO.Path.GetFileName(file)}'.");
+                continue;
+            }
             AddDesktopFile(frame, file, System.IO.Path.GetFileNameWithoutExtension(file));
+        }
         SizeFramesToContent();
         Persist();
     }
@@ -180,6 +189,33 @@ public class FrameManager
         // render happened while they still pointed at the now-empty previous custody path, so they fell
         // back to the arrowed .lnk icon). Clear so the next render re-extracts from the fresh target.
         IconService.ClearCache();
+    }
+
+    /// <summary>Removes items whose custody copy is gone (dead links) — e.g. the user deleted the file
+    /// via the shell menu in an older build that lacked the post-delete cleanup. Call at startup after
+    /// RetakeAll. Only touches items whose Target points INTO custody and no longer exists (so a
+    /// .lnk-original whose Target is the real exe is never mistaken for dead).</summary>
+    public void SweepDeadLinks()
+    {
+        string custodyRoot = System.IO.Path.Combine(
+            System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
+            "SmartCorral", "custody");
+        bool any = false;
+        foreach (var f in Data.Frames.OfType<DataFrame>().ToList())
+        {
+            var dead = f.Items.Where(it =>
+                !string.IsNullOrEmpty(it.Target) &&
+                it.Target.StartsWith(custodyRoot, System.StringComparison.OrdinalIgnoreCase) &&
+                !System.IO.File.Exists(it.Target) && !System.IO.Directory.Exists(it.Target)).ToList();
+            foreach (var d in dead)
+            {
+                Logger.Info($"SweepDeadLinks: removing dead item '{d.DisplayName}' (custody gone: {d.Target}).");
+                f.Items.Remove(d);
+                TryDeleteShortcut(d.Filename);
+                any = true;
+            }
+        }
+        if (any) Persist();
     }
 
     private static void TryDeleteShortcut(string relativeFilename)
