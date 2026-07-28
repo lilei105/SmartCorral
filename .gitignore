@@ -20,6 +20,9 @@ appsettings.*.json
 ## portable runtime data (frames/settings/shortcuts live next to the EXE; never commit)
 data/
 
+## local design source (the rendered app.ico is tracked; the design zip is local only)
+SmartCorral_Logo.zip
+
 ## OS
 Thumbs.db
 desktop.ini
