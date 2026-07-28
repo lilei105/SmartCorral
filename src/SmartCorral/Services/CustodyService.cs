@@ -140,6 +140,48 @@ public static class CustodyService
         }
     }
 
+    /// <summary>Restores custody files/dirs NOT in <paramref name="referencedCustodyPaths"/> back to the
+    /// user's desktop — they're orphans (no FrameItem references them), e.g. left behind when a
+    /// duplicate item was removed. Non-conflicting names; drops their manifest entries. Called at
+    /// startup BEFORE the desktop watcher starts, so restored files aren't re-captured.</summary>
+    public static void RestoreUnreferenced(IEnumerable<string> referencedCustodyPaths)
+    {
+        try
+        {
+            var keep = new HashSet<string>(
+                referencedCustodyPaths.Where(p => !string.IsNullOrEmpty(p)),
+                StringComparer.OrdinalIgnoreCase);
+            if (!Directory.Exists(CustodyDir)) return;
+
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            var manifest = LoadManifest();
+            bool changed = false;
+
+            foreach (string entry in Directory.EnumerateFileSystemEntries(CustodyDir))
+            {
+                if (keep.Contains(entry)) continue; // still referenced by a live item
+                bool isDir = Directory.Exists(entry);
+                string name = Path.GetFileName(entry.TrimEnd('\\', '/'));
+                string target = UniqueTarget(desktop, name, isDir); // non-conflicting on the desktop
+                if (Move(entry, target, isDir) && (File.Exists(target) || Directory.Exists(target)))
+                {
+                    Logger.Info($"RestoreOrphan: '{name}' -> {target}");
+                    manifest.RemoveAll(e => PathEquals(e.CustodyPath, entry));
+                    changed = true;
+                }
+                else
+                {
+                    Logger.Warn($"RestoreOrphan: could not restore '{name}' (left in custody)");
+                }
+            }
+            if (changed) SaveManifest(manifest);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("RestoreUnreferenced threw", ex);
+        }
+    }
+
     // ---- internals ----
 
     /// <summary>Restores one entry, preferring its exact original directory; if that directory is

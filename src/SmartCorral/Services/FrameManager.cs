@@ -191,17 +191,21 @@ public class FrameManager
         IconService.ClearCache();
     }
 
-    /// <summary>Removes items whose custody copy is gone (dead links) — e.g. the user deleted the file
-    /// via the shell menu in an older build that lacked the post-delete cleanup. Call at startup after
-    /// RetakeAll. Only touches items whose Target points INTO custody and no longer exists (so a
-    /// .lnk-original whose Target is the real exe is never mistaken for dead).</summary>
-    public void SweepDeadLinks()
+    /// <summary>Startup data self-heal: drop dead-link items, dedup exact-SourcePath duplicates, delete
+    /// orphaned wrapper .lnk, and restore orphaned custody files to the desktop. Run after RetakeAll
+    /// and BEFORE the desktop watcher starts, so restored files aren't re-captured by the watcher.</summary>
+    public void SweepDataHealth()
     {
         string custodyRoot = System.IO.Path.Combine(
             System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData),
             "SmartCorral", "custody");
+        string shortcutsDir = System.IO.Path.Combine(AppContext.BaseDirectory, "data", "shortcuts");
+        var frames = Data.Frames.OfType<DataFrame>().ToList();
         bool any = false;
-        foreach (var f in Data.Frames.OfType<DataFrame>().ToList())
+
+        // 1. Dead links: Target points into custody but the file is gone (never matches a .lnk-original
+        //    whose Target is the real exe — that's not under custodyRoot).
+        foreach (var f in frames)
         {
             var dead = f.Items.Where(it =>
                 !string.IsNullOrEmpty(it.Target) &&
@@ -209,13 +213,56 @@ public class FrameManager
                 !System.IO.File.Exists(it.Target) && !System.IO.Directory.Exists(it.Target)).ToList();
             foreach (var d in dead)
             {
-                Logger.Info($"SweepDeadLinks: removing dead item '{d.DisplayName}' (custody gone: {d.Target}).");
-                f.Items.Remove(d);
-                TryDeleteShortcut(d.Filename);
-                any = true;
+                Logger.Info($"Sweep: dead link '{d.DisplayName}' (custody gone) — removing.");
+                f.Items.Remove(d); TryDeleteShortcut(d.Filename); any = true;
             }
         }
+
+        // 2. Exact-SourcePath duplicates: keep the first occurrence, drop the rest.
+        var seen = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        foreach (var f in frames)
+        {
+            var dups = f.Items.Where(it =>
+            {
+                if (string.IsNullOrEmpty(it.SourcePath)) return false;
+                return !seen.Add(it.SourcePath);
+            }).ToList();
+            foreach (var d in dups)
+            {
+                Logger.Info($"Sweep: duplicate SourcePath '{d.SourcePath}' — removing extra '{d.DisplayName}'.");
+                f.Items.Remove(d); TryDeleteShortcut(d.Filename); any = true;
+            }
+        }
+
+        // 3. Orphaned wrapper .lnk (in shortcuts/ but referenced by no item).
+        var usedWrappers = new HashSet<string>(
+            frames.SelectMany(f => f.Items).Select(it => it.Filename ?? ""),
+            System.StringComparer.OrdinalIgnoreCase);
+        if (System.IO.Directory.Exists(shortcutsDir))
+        {
+            foreach (string file in System.IO.Directory.EnumerateFiles(shortcutsDir))
+            {
+                string rel = System.IO.Path.Combine("shortcuts", System.IO.Path.GetFileName(file));
+                if (!usedWrappers.Contains(rel))
+                {
+                    Logger.Info($"Sweep: orphaned wrapper '{System.IO.Path.GetFileName(file)}' — deleting.");
+                    try { System.IO.File.Delete(file); } catch { }
+                    any = true;
+                }
+            }
+        }
+
         if (any) Persist();
+
+        // 4. Orphaned custody files (no live item references them) → restore to desktop. Run last so
+        //    duplicates removed above count as unreferenced. Safe from the watcher (runs at startup
+        //    before the watcher starts; restored files predate it, and FSW only fires on later changes).
+        //    A custody copy is referenced via Target (raw files) OR LivePath (.lnk originals, whose
+        //    Target is the resolved exe, not the custody path) — must check BOTH.
+        var referencedCustody = frames.SelectMany(f => f.Items)
+            .SelectMany(it => new[] { it.Target ?? "", it.LivePath ?? "" })
+            .Where(t => !string.IsNullOrEmpty(t));
+        CustodyService.RestoreUnreferenced(referencedCustody);
     }
 
     private static void TryDeleteShortcut(string relativeFilename)

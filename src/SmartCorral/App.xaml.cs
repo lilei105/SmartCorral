@@ -52,7 +52,7 @@ public partial class App : Application
         _frames.UIScale = _settings.UIScale;
         _frames.Initialize();
         _frames.RetakeAllIntoCustody();
-        _frames.SweepDeadLinks(); // drop items whose custody copy was deleted (dead links)
+        _frames.SweepDataHealth(); // self-heal: dead links, dup SourcePaths, orphan wrappers/custody
         _frames.RefreshAll();
         Logger.Info($"Startup ready: {_frames.Data.Frames.Count} frame(s).");
 
