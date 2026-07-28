@@ -105,3 +105,4 @@ WinForms 仅 `TrayShell`（`NotifyIcon`）用。已从隐式 usings 移除 `Syst
 - **`.lnk` 处理是 late-bound COM**（`ShortcutService` 用 `dynamic WScript.Shell`），不是 COM 引用，所以 `dotnet build` 能编。
 - **`DesktopShell.Shutdown` 永远把桌面图标还原成"可见"**——不要信任运行时捕获的"原始状态"（可能被上次崩溃污染）。
 - **拖拽/缩放/菜单位置**跨 DPI 屏时都要走 `DpiScale` 或 `VisualTreeHelper.GetDpi`，别直接用 DIP。
+- **隐藏桌面图标必须用原生 toggle，不要 SW_HIDE 隐藏 SysListView32**：SW_HIDE 把整个列表控件藏掉，会**连带杀掉桌面框选**（很多人思考时会无意识框选）。改用系统原生"显示桌面图标"开关：给 `SHELLDLL_DefView` 发 `WM_COMMAND 0x7402`（Win10/11 验证过；老资料里的 `0x7000` 在现代版本**无效**）。它只藏图标、列表控件仍在，框选保留。该命令是**翻转**（toggle）不是设值，所以用 flag 文件追踪绝对状态 + 崩溃自愈（见 `DesktopIconHider` / `DesktopShell`）。启动时 `ShowDesktopListView()` 还会 SW_SHOW 一次，清掉旧机制残留。
