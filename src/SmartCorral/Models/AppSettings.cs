@@ -27,4 +27,9 @@ public class AppSettings
     /// <summary>Write a timestamped trace to data/smartcorral.log (lifecycle, custody moves, AI pipeline
     /// + errors). Default on so problems are captured without a settings round-trip.</summary>
     public bool EnableLogging { get; set; } = true;
+
+    /// <summary>Auto-file newly-arrived desktop items (downloads/save-as) via a FileSystemWatcher +
+    /// incremental AI categorize. Default on (the product's pitch is "automatic"). Only acts when AI
+    /// is configured; processes only genuinely-new paths, never pre-existing leftovers.</summary>
+    public bool EnableIncrementalCategorize { get; set; } = true;
 }

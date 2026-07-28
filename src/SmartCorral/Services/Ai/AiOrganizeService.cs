@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows;
@@ -79,6 +80,7 @@ public static class AiOrganizeService
                 var frame = frames.EnsureCategoryFrame(category);
                 frames.AddDesktopFile(frame, file.FullPath, file.DisplayName);
                 frames.Refresh(frame);
+                Logger.Info($"AI organize: '{file.DisplayName}' -> 「{category}」");
                 applied++;
             }
             Logger.Info($"AI organize: filed {applied} item(s) into frames.");
@@ -99,6 +101,82 @@ public static class AiOrganizeService
             dispatcher.InvokeAsync(() => onResult(message, isError));
         else
             onResult(message, isError);
+    }
+
+    /// <summary>Incremental auto-categorize: categorize ONLY the given newly-arrived desktop paths —
+    /// NOT a full re-scan. Pre-existing unclassified "leftovers" are deliberately left alone (only the
+    /// tray "Re-categorize" re-sweeps everything). Called by DesktopWatcher when new files land.</summary>
+    public static async Task CategorizePathsAsync(
+        FrameManager frames, AppSettings settings, IEnumerable<string> paths, Action<string, bool>? onResult = null)
+    {
+        if (!IsConfigured(settings))
+        {
+            Logger.Warn("CategorizePaths: AI not configured — new files left on desktop.");
+            Report(onResult, "AI 未配置，新文件留在桌面。", isError: true);
+            return;
+        }
+
+        // Build descriptors only for paths that still exist and aren't temp/hidden/system.
+        var toCategorize = new List<FileDescriptor>();
+        foreach (string p in paths.Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            bool isDir = Directory.Exists(p);
+            if (!isDir && !File.Exists(p)) continue;              // gone (e.g. a .crdownload renamed away)
+            if (DesktopScanner.IsLikelyTempName(p)) continue;     // still an in-progress temp
+            try { if ((File.GetAttributes(p) & (FileAttributes.Hidden | FileAttributes.System)) != 0) continue; }
+            catch { }
+            string name = isDir ? Path.GetFileName(p.TrimEnd('\\', '/')) : Path.GetFileNameWithoutExtension(p);
+            string ext = isDir ? "" : Path.GetExtension(p).TrimStart('.').ToLowerInvariant();
+            toCategorize.Add(new FileDescriptor(p, name, ext, isDir));
+        }
+
+        Logger.Info($"CategorizePaths: {toCategorize.Count} new item(s) to categorize.");
+        if (toCategorize.Count == 0) return;
+
+        Dictionary<int, string> assignments;
+        try
+        {
+            using var llm = new LlmClient(settings.AiBaseUrl, settings.AiApiKey, settings.AiModel);
+            assignments = await AiCategorizer.CategorizeAsync(llm, toCategorize);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("CategorizePaths: LLM call failed — new files left on desktop.", ex);
+            Report(onResult, "自动归类失败，新文件留在桌面，原因详见 smartcorral.log。", isError: true);
+            return;
+        }
+        Logger.Info($"CategorizePaths: model categorized {assignments.Count}/{toCategorize.Count} item(s).");
+
+        await Application.Current.Dispatcher.InvokeAsync(() =>
+        {
+            int applied = 0;
+            string? firstName = null, firstCat = null;
+            var cats = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < toCategorize.Count; i++)
+            {
+                if (!assignments.TryGetValue(i + 1, out string? category)) continue; // model gave no category — leave it
+                var desc = toCategorize[i];
+                var frame = frames.EnsureCategoryFrame(category); // reuses an existing frame on exact title match
+                frames.AddDesktopFile(frame, desc.FullPath, desc.DisplayName); // → custody Take (leaves desktop)
+                frames.Refresh(frame);
+                Logger.Info($"CategorizePaths: filed '{desc.DisplayName}' -> 「{category}」");
+                if (applied == 0) { firstName = desc.DisplayName; firstCat = category; }
+                cats.Add(category);
+                applied++;
+            }
+            Logger.Info($"CategorizePaths: filed {applied} new item(s) into: {string.Join(", ", cats)}.");
+            if (applied > 0)
+            {
+                frames.RemoveEmptyDefaultFrames();
+                frames.SizeFramesToContent();
+                frames.ArrangeAll();
+                // Name the target frame so the user can find where the file went.
+                string msg = applied == 1
+                    ? $"📥「{firstName}」已自动归入「{firstCat}」"
+                    : $"📥 已自动归类 {applied} 个新文件到「{string.Join("」「", cats)}」";
+                Report(onResult, msg, isError: false);
+            }
+        });
     }
 
     /// <summary>True if AI is usable: a model is set AND either an API key is set OR the endpoint is

@@ -14,6 +14,7 @@ public partial class App : Application
     private TrayShell? _tray;
     private FrameManager? _frames;
     private AppSettings _settings = new();
+    private DesktopWatcher? _watcher;
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
@@ -57,6 +58,10 @@ public partial class App : Application
         // 6. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
         _ = AiOrganizeService.RunAsync(_frames, _settings);
 
+        // 7. Watch the desktop for newly-arrived files → incremental auto-categorize. Started AFTER
+        //    RetakeAll (so it doesn't see re-custody moves), only if enabled AND AI is configured.
+        StartWatcher();
+
         // Best-effort restore on a hard exit; RestoreAll at next launch covers anything this misses.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => { Logger.Info("ProcessExit: RestoreAll."); CustodyService.RestoreAll(); };
     }
@@ -64,6 +69,7 @@ public partial class App : Application
     private void App_OnExit(object sender, ExitEventArgs e)
     {
         Logger.Info("=== Smart Corral exiting (clean) — persist + RestoreAll ===");
+        StopWatcher();        // stop watching BEFORE RestoreAll moves files back onto the desktop
         _frames?.Persist();
         CustodyService.RestoreAll(); // clean exit → desktop fully restored, manifest cleared
         _tray?.Dispose();
@@ -84,6 +90,8 @@ public partial class App : Application
             _frames.SizeFramesToContent();
             _frames.RefreshAll();
             _frames.ArrangeAll();
+            // Match the watcher to the (possibly changed) incremental toggle.
+            if (_settings.EnableIncrementalCategorize) StartWatcher(); else StopWatcher();
         }
     }
 
@@ -101,10 +109,11 @@ public partial class App : Application
         // Tell the user it's working right away — the LLM call + filing can take ~10–15 s, which
         // otherwise reads as "nothing happened".
         _tray?.Balloon("AI 分类中", "正在用 AI 重新分类桌面（约 10–15 秒）…");
-        // ClearAll restores every custodied item to the desktop first, then wipes frames/shortcuts —
-        // so the desktop is repopulated before the AI re-scan (otherwise it'd scan an empty desktop and
-        // orphan everything in custody). RunAsync then re-categorizes and re-takes each item.
-        _frames?.ClearAll();
+        // Pause the watcher around ClearAll: its RestoreAll puts files back on the desktop = Created
+        // events we must NOT auto-file (the RunAsync below re-categorizes them).
+        _watcher?.Pause();
+        _frames?.ClearAll();   // restore files to desktop, wipe frames/shortcuts
+        _watcher?.Resume();
         if (_frames != null)
             _ = AiOrganizeService.RunAsync(_frames, _settings, onResult: (msg, err) => _tray?.Balloon("AI 分类", msg, warn: err));
     }
@@ -121,7 +130,53 @@ public partial class App : Application
             MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
         if (rc != MessageBoxResult.OK) return;
 
+        // Pause the watcher: ClearAll's RestoreAll returns files to the desktop — must NOT re-file them
+        // (the user explicitly asked for everything back).
+        _watcher?.Pause();
         _frames?.ClearAll();   // RestoreAll (files → desktop, manifest cleared) + wipe frames/shortcuts
         _frames?.AddFrame();   // reopen one empty welcome frame (so it's not a bare tray)
+        _watcher?.Resume();
+    }
+
+    // ---- incremental auto-categorize (desktop watcher) ----
+
+    /// <summary>Starts the desktop watcher if incremental categorize is enabled AND AI is configured.
+    /// Idempotent — no-op if already running or preconditions aren't met.</summary>
+    private void StartWatcher()
+    {
+        if (_watcher != null) return;
+        if (!_settings.EnableIncrementalCategorize) return;
+        if (!AiOrganizeService.IsConfigured(_settings))
+        {
+            Logger.Info("DesktopWatcher: not starting (AI not configured).");
+            return;
+        }
+        try
+        {
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+            _watcher = new DesktopWatcher(desktop, OnNewDesktopFiles);
+            _watcher.Start();
+            Logger.Info($"DesktopWatcher: watching '{desktop}'.");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error("DesktopWatcher: failed to start", ex);
+        }
+    }
+
+    private void StopWatcher()
+    {
+        if (_watcher == null) return;
+        try { _watcher.Dispose(); } catch { }
+        _watcher = null;
+        Logger.Info("DesktopWatcher: stopped.");
+    }
+
+    /// <summary>Watcher callback (already on the UI thread): categorize ONLY the newly-arrived paths.</summary>
+    private void OnNewDesktopFiles(System.Collections.Generic.IReadOnlyList<string> paths)
+    {
+        if (_frames == null) return;
+        _ = AiOrganizeService.CategorizePathsAsync(_frames, _settings, paths,
+            onResult: (msg, err) => _tray?.Balloon("自动归类", msg, warn: err));
     }
 }

@@ -23,6 +23,7 @@ public partial class SettingsWindow : Window
         SeparateFoldersBox.IsChecked = settings.SeparateFolders;
         ForceTopmostBox.IsChecked = settings.ForceTopmost;
         EnableLoggingBox.IsChecked = settings.EnableLogging;
+        IncrementalBox.IsChecked = settings.EnableIncrementalCategorize;
         UIScaleSlider.Value = Math.Clamp(settings.UIScale, 0.8, 1.3);
     }
 
@@ -35,6 +36,7 @@ public partial class SettingsWindow : Window
         _settings.SeparateFolders = SeparateFoldersBox.IsChecked == true;
         _settings.ForceTopmost = ForceTopmostBox.IsChecked == true;
         _settings.EnableLogging = EnableLoggingBox.IsChecked == true;
+        _settings.EnableIncrementalCategorize = IncrementalBox.IsChecked == true;
         _settings.UIScale = UIScaleSlider.Value;
         PersistenceService.SaveSettings(_settings);
         DialogResult = true;
