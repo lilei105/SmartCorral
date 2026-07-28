@@ -72,7 +72,14 @@ public partial class App : Application
         Logger.Info("=== Smart Corral exiting (clean) — persist + RestoreAll ===");
         StopWatcher();        // stop watching BEFORE RestoreAll moves files back onto the desktop
         _frames?.Persist();
-        CustodyService.RestoreAll(); // clean exit → desktop fully restored, manifest cleared
+        int kept = CustodyService.RestoreAll(); // clean exit → desktop restored (locked files retry next launch)
+        if (kept > 0 && _tray != null)
+        {
+            // Some files couldn't be moved back (locked by a running app) — they stay in custody and
+            // retry next launch. Tell the user so the missing desktop icons aren't a surprise.
+            _tray.Balloon("部分文件未还原", $"{kept} 个文件正在运行、未能还原回桌面（下次启动自动重试）。", warn: true);
+            System.Threading.Thread.Sleep(1500); // let the toast register before the tray is disposed
+        }
         _tray?.Dispose();
     }
 

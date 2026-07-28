@@ -78,10 +78,12 @@ public static class AiOrganizeService
 
                 var file = toCategorize[i];
                 var frame = frames.EnsureCategoryFrame(category);
-                frames.AddDesktopFile(frame, file.FullPath, file.DisplayName);
-                frames.Refresh(frame);
-                Logger.Info($"AI organize: '{file.DisplayName}' -> 「{category}」");
-                applied++;
+                if (frames.AddDesktopFile(frame, file.FullPath, file.DisplayName))
+                {
+                    frames.Refresh(frame);
+                    Logger.Info($"AI organize: '{file.DisplayName}' -> 「{category}」");
+                    applied++;
+                }
             }
             Logger.Info($"AI organize: filed {applied} item(s) into frames.");
             frames.RemoveEmptyDefaultFrames();
@@ -157,12 +159,14 @@ public static class AiOrganizeService
                 if (!assignments.TryGetValue(i + 1, out string? category)) continue; // model gave no category — leave it
                 var desc = toCategorize[i];
                 var frame = frames.EnsureCategoryFrame(category); // reuses an existing frame on exact title match
-                frames.AddDesktopFile(frame, desc.FullPath, desc.DisplayName); // → custody Take (leaves desktop)
-                frames.Refresh(frame);
-                Logger.Info($"CategorizePaths: filed '{desc.DisplayName}' -> 「{category}」");
-                if (applied == 0) { firstName = desc.DisplayName; firstCat = category; }
-                cats.Add(category);
-                applied++;
+                if (frames.AddDesktopFile(frame, desc.FullPath, desc.DisplayName)) // → custody Take (leaves desktop)
+                {
+                    frames.Refresh(frame);
+                    Logger.Info($"CategorizePaths: filed '{desc.DisplayName}' -> 「{category}」");
+                    if (applied == 0) { firstName = desc.DisplayName; firstCat = category; }
+                    cats.Add(category);
+                    applied++;
+                }
             }
             Logger.Info($"CategorizePaths: filed {applied} new item(s) into: {string.Join(", ", cats)}.");
             if (applied > 0)

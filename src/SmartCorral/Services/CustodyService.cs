@@ -93,13 +93,15 @@ public static class CustodyService
     }
 
     /// <summary>Restores ALL custodied items to their original paths and clears the manifest. Called on
-    /// clean exit and as the FIRST step of every launch (crash self-heal). Idempotent.</summary>
-    public static void RestoreAll()
+    /// clean exit and as the FIRST step of every launch (crash self-heal). Idempotent. Returns the
+    /// count of items that COULDN'T be restored (e.g. locked by a running app) — they're kept for
+    /// retry next launch; callers can warn the user.</summary>
+    public static int RestoreAll()
     {
         try
         {
             var manifest = LoadManifest();
-            if (manifest.Count == 0) return;
+            if (manifest.Count == 0) return 0;
             Logger.Info($"RestoreAll: {manifest.Count} item(s) to restore.");
 
             var remaining = new List<CustodyEntry>();
@@ -110,10 +112,12 @@ public static class CustodyService
             }
             SaveManifest(remaining);
             Logger.Info($"RestoreAll: restored {manifest.Count - remaining.Count}, {remaining.Count} kept for retry.");
+            return remaining.Count;
         }
         catch (Exception ex)
         {
             Logger.Error("RestoreAll threw", ex);
+            return 0;
         }
     }
 

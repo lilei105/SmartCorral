@@ -86,8 +86,10 @@ public class FrameManager
 
     /// <summary>Imports one file as a shortcut item into a frame (shared by manual drop + AI). The
     /// original desktop item is moved into custody so its icon leaves the desktop; the frame's shortcut
-    /// points at the custody copy (raw files) or a faithful verbatim copy (.lnk/.url originals).</summary>
-    public void AddDesktopFile(DataFrame frame, string fullPath, string displayName)
+    /// points at the custody copy (raw files) or a faithful verbatim copy (.lnk/.url originals).
+    /// Returns false (file left on the desktop, NOT filed) if it can't be moved into custody — e.g. a
+    /// running executable, or a folder containing one (locked).</summary>
+    public bool AddDesktopFile(DataFrame frame, string fullPath, string displayName)
     {
         bool isFolder = System.IO.Directory.Exists(fullPath);
         bool isLink = fullPath.EndsWith(".url", System.StringComparison.OrdinalIgnoreCase);
@@ -95,19 +97,25 @@ public class FrameManager
 
         // 1. Import FIRST, while the original is still on the desktop: copy .lnk/.url verbatim, or create
         //    a wrapper .lnk for raw files/folders pointing at the desktop path (re-pointed to custody in
-        //    step 3). Doing this before Take means an Import failure leaves the file safely on the desktop
-        //    (no orphan in custody).
+        //    step 3). Doing this before Take means an Import failure leaves the file safely on the desktop.
         string relative = ShortcutService.Import(fullPath, displayName);
         string target = ShortcutService.ResolveTarget(relative);
         if (string.IsNullOrEmpty(target)) target = fullPath;
 
-        // 2. Move the real desktop item into custody (its icon leaves the desktop). Degrades to fullPath
-        //    if custody can't be taken (locked/missing) — the icon then just stays on the desktop.
+        // 2. Move the real desktop item into custody. If it can't be moved (locked by a running app),
+        //    DON'T file a half-item that would show the file in both the frame AND the desktop — undo the
+        //    import and leave it on the desktop for the user to close + re-file later.
         string custody = CustodyService.Take(fullPath);
+        if (string.Equals(custody, fullPath, System.StringComparison.OrdinalIgnoreCase))
+        {
+            Logger.Warn($"AddDesktopFile: '{displayName}' couldn't be moved into custody (locked/running?) — left on desktop, not filed.");
+            TryDeleteShortcut(relative);
+            return false;
+        }
 
         // 3. Raw files/folders: the wrapper .lnk still points at the now-empty desktop path — re-point it
         //    at the custody copy. .lnk/.url originals were copied verbatim and keep their own target.
-        if (!isShortcutOriginal && !string.Equals(custody, fullPath, System.StringComparison.OrdinalIgnoreCase))
+        if (!isShortcutOriginal)
         {
             ShortcutService.Retarget(relative, custody);
             target = custody;
@@ -124,6 +132,7 @@ public class FrameManager
             LivePath = custody, // on-disk location of the user's real item right now
             DisplayOrder = frame.Items.Count
         });
+        return true;
     }
 
     /// <summary>Removes a single item from a frame and restores its original desktop file from custody
