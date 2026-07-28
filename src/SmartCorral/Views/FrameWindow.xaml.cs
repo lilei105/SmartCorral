@@ -180,16 +180,44 @@ public partial class FrameWindow
 
     private void Item_RightClick(object sender, MouseButtonEventArgs e)
     {
-        if (sender is Button b && b.Tag is FrameItem item && !string.IsNullOrEmpty(item.SourcePath))
+        if (sender is Button b && b.Tag is FrameItem item)
         {
-            // Show the real Windows shell context menu for the original desktop item.
-            Point pt = PointToScreen(e.GetPosition(this));
-            IntPtr hwnd = new WindowInteropHelper(this).Handle;
-            int px = (int)pt.X;
-            int py = (int)pt.Y;
-            ShellContextMenu.Show(item.SourcePath, hwnd, px, py);
+            ShowItemMenu(item, e);
             e.Handled = true; // prevent the frame's own context menu from also showing
         }
+    }
+
+    /// <summary>Per-item right-click menu: a non-destructive "Remove" (restores the file to the desktop)
+    /// plus "More" for the full native shell menu. The shell menu targets the item's CURRENT on-disk path
+    /// (its custody copy via LivePath) — NOT SourcePath, which is empty once the item is custodied.</summary>
+    private void ShowItemMenu(FrameItem item, MouseButtonEventArgs e)
+    {
+        // Capture the physical cursor position now for the native menu (fired later from a Click handler).
+        Point pt = PointToScreen(e.GetPosition(this));
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        int px = (int)pt.X, py = (int)pt.Y;
+
+        var menu = new ContextMenu();
+
+        var miRemove = new MenuItem { Header = "移除（还原到桌面）/ Remove" };
+        miRemove.Click += (_, _) => _mgr.RemoveItem(_frame, item);
+
+        var miMore = new MenuItem { Header = "更多（系统右键菜单）/ More…" };
+        miMore.Click += (_, _) =>
+        {
+            string? target = item.LivePath;
+            if (string.IsNullOrEmpty(target)) target = item.Target;
+            if (string.IsNullOrEmpty(target)) target = item.SourcePath;
+            if (!string.IsNullOrEmpty(target))
+                ShellContextMenu.Show(target, hwnd, px, py);
+        };
+
+        menu.Items.Add(miRemove);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(miMore);
+
+        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        menu.IsOpen = true;
     }
 
     // ---- drag/drop of files ----

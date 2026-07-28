@@ -24,34 +24,41 @@ public partial class App : Application
             return;
         }
 
-        // 2. Load settings + tray
+        // 2. ONE-TIME legacy recovery: if an older build left the icons globally hidden, restore them.
+        //    The custody model clears the desktop per-item now — there is no global hide anymore.
+        DesktopShell.RecoverLegacyHide();
+
+        // 3. Crash self-heal: FIRST move every custodied item back to its original desktop path. If the
+        //    last run ended cleanly this is a no-op; if it crashed, the desktop is fully restored here.
+        CustodyService.RestoreAll();
+
+        // 4. Load settings + tray
         _settings = PersistenceService.LoadSettings();
         _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll(), ReorganizeAll);
 
-        // 3. Load frames + show windows
+        // 5. Load frames + show windows, then re-custody everything already filed (RestoreAll put the
+        //    items back on the desktop; this moves each into a fresh custody path for THIS session and
+        //    re-points the raw-file shortcuts so icons/launch stay correct).
         _frames = new FrameManager();
         _frames.IconsPerRow = _settings.IconsPerRow;
         _frames.SeparateFolders = _settings.SeparateFolders;
         _frames.ForceTopmost = _settings.ForceTopmost;
         _frames.UIScale = _settings.UIScale;
         _frames.Initialize();
+        _frames.RetakeAllIntoCustody();
+        _frames.RefreshAll();
 
-        // 4. Hide native desktop icons only once there's something organized. On a fresh/empty run
-        //    we leave the icons visible + show a tip so the user can drag files in or configure AI
-        //    first; hiding kicks in as soon as the first item lands in a frame (restore on exit).
-        DesktopShell.Startup(_frames.HasAnyItems());
-
-        // 5. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
+        // 6. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
         _ = AiOrganizeService.RunAsync(_frames, _settings);
 
-        // Best-effort restore on a hard exit; the flag file covers anything this misses next launch.
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => DesktopShell.Shutdown();
+        // Best-effort restore on a hard exit; RestoreAll at next launch covers anything this misses.
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => CustodyService.RestoreAll();
     }
 
     private void App_OnExit(object sender, ExitEventArgs e)
     {
         _frames?.Persist();
-        DesktopShell.Shutdown();
+        CustodyService.RestoreAll(); // clean exit → desktop fully restored, manifest cleared
         _tray?.Dispose();
     }
 
@@ -74,7 +81,9 @@ public partial class App : Application
 
     private void ReorganizeAll()
     {
-        // Wipe all frames/shortcuts, then re-run AI over the whole desktop.
+        // ClearAll restores every custodied item to the desktop first, then wipes frames/shortcuts —
+        // so the desktop is repopulated before the AI re-scan (otherwise it'd scan an empty desktop and
+        // orphan everything in custody). RunAsync then re-categorizes and re-takes each item.
         _frames?.ClearAll();
         if (_frames != null) _ = AiOrganizeService.RunAsync(_frames, _settings);
     }

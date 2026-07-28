@@ -75,19 +75,34 @@ public class FrameManager
         Persist();
     }
 
-    /// <summary>Imports one file as a shortcut item into a frame (shared by manual drop + AI).</summary>
+    /// <summary>Imports one file as a shortcut item into a frame (shared by manual drop + AI). The
+    /// original desktop item is moved into custody so its icon leaves the desktop; the frame's shortcut
+    /// points at the custody copy (raw files) or a faithful verbatim copy (.lnk/.url originals).</summary>
     public void AddDesktopFile(DataFrame frame, string fullPath, string displayName)
     {
         bool isFolder = System.IO.Directory.Exists(fullPath);
         bool isLink = fullPath.EndsWith(".url", System.StringComparison.OrdinalIgnoreCase);
+        bool isShortcutOriginal = fullPath.EndsWith(".lnk", System.StringComparison.OrdinalIgnoreCase) || isLink;
 
+        // 1. Import FIRST, while the original is still on the desktop: copy .lnk/.url verbatim, or create
+        //    a wrapper .lnk for raw files/folders pointing at the desktop path (re-pointed to custody in
+        //    step 3). Doing this before Take means an Import failure leaves the file safely on the desktop
+        //    (no orphan in custody).
         string relative = ShortcutService.Import(fullPath, displayName);
         string target = ShortcutService.ResolveTarget(relative);
         if (string.IsNullOrEmpty(target)) target = fullPath;
 
-        // First item to land anywhere → transition from "empty/welcome" to "organizing": hide the
-        // native desktop icons now (until then they're visible so the user can drag them in).
-        bool wasEmpty = !HasAnyItems();
+        // 2. Move the real desktop item into custody (its icon leaves the desktop). Degrades to fullPath
+        //    if custody can't be taken (locked/missing) — the icon then just stays on the desktop.
+        string custody = CustodyService.Take(fullPath);
+
+        // 3. Raw files/folders: the wrapper .lnk still points at the now-empty desktop path — re-point it
+        //    at the custody copy. .lnk/.url originals were copied verbatim and keep their own target.
+        if (!isShortcutOriginal && !string.Equals(custody, fullPath, System.StringComparison.OrdinalIgnoreCase))
+        {
+            ShortcutService.Retarget(relative, custody);
+            target = custody;
+        }
 
         frame.Items.Add(new FrameItem
         {
@@ -97,10 +112,66 @@ public class FrameManager
             IsLink = isLink,
             Target = target,
             SourcePath = fullPath,
+            LivePath = custody, // on-disk location of the user's real item right now
             DisplayOrder = frame.Items.Count
         });
+    }
 
-        if (wasEmpty) DesktopShell.Hide();
+    /// <summary>Removes a single item from a frame and restores its original desktop file from custody
+    /// (non-destructive: the file goes back to the desktop, unlike permanent delete).</summary>
+    public void RemoveItem(DataFrame frame, FrameItem item)
+    {
+        if (!frame.Items.Remove(item)) return;
+        CustodyService.Restore(item.SourcePath ?? "");   // back to the desktop (no-op if never custodied)
+        TryDeleteShortcut(item.Filename);
+        if (_windows.TryGetValue(frame.Id, out var win)) win.RenderItems();
+        Persist();
+    }
+
+    /// <summary>Re-custodies every already-filed item at launch: RestoreAll put them back on the desktop,
+    /// so move each one into a fresh custody path for this session and re-point raw-file wrapper .lnks.
+    /// Call after Initialize() and before the windows' icons are relied upon (then RefreshAll).</summary>
+    public void RetakeAllIntoCustody()
+    {
+        foreach (var it in AllItems())
+        {
+            string src = it.SourcePath ?? "";
+            if (System.IO.File.Exists(src) || System.IO.Directory.Exists(src))
+            {
+                string custody = CustodyService.Take(src);
+                it.LivePath = custody;
+                bool isShortcutOriginal = src.EndsWith(".lnk", System.StringComparison.OrdinalIgnoreCase)
+                                       || src.EndsWith(".url", System.StringComparison.OrdinalIgnoreCase);
+                if (!isShortcutOriginal)
+                {
+                    // The wrapper .lnk from last session still points at the old (now empty) custody path.
+                    ShortcutService.Retarget(it.Filename, custody);
+                    it.Target = custody;
+                }
+            }
+            else
+            {
+                // Original no longer on the desktop (user deleted it externally) — degrade to last target.
+                it.LivePath = it.Target ?? src;
+            }
+        }
+    }
+
+    private static void TryDeleteShortcut(string relativeFilename)
+    {
+        try
+        {
+            string abs = System.IO.Path.Combine(AppContext.BaseDirectory, "data", relativeFilename);
+            if (!string.IsNullOrEmpty(relativeFilename) && System.IO.File.Exists(abs))
+                System.IO.File.Delete(abs);
+        }
+        catch { }
+    }
+
+    private System.Collections.Generic.IEnumerable<FrameItem> AllItems()
+    {
+        foreach (var f in Data.Frames.OfType<DataFrame>())
+            foreach (var it in f.Items) yield return it;
     }
 
     public void AddFrame()
@@ -116,6 +187,12 @@ public class FrameManager
     {
         var f = Data.Frames.FirstOrDefault(x => x.Id == id);
         if (f == null) return;
+
+        // Restore this frame's items from custody back to the desktop before dropping them.
+        if (f is DataFrame df)
+            foreach (var it in df.Items)
+                CustodyService.Restore(it.SourcePath ?? "");
+
         if (_windows.TryGetValue(id, out var win))
         {
             _windows.Remove(id);
@@ -236,9 +313,12 @@ public class FrameManager
         }
     }
 
-    /// <summary>Closes all frames and wipes their items + shortcuts (used by 'Re-organize all').</summary>
+    /// <summary>Closes all frames and wipes their items + shortcuts (used by 'Re-organize all'). Restores
+    /// every custodied item to the desktop first, so the desktop is repopulated before the AI re-scan.</summary>
     public void ClearAll()
     {
+        CustodyService.RestoreAll(); // items → desktop, manifest cleared
+
         foreach (var (id, win) in _windows.ToList()) win.Close();
         _windows.Clear();
         Data.Frames.Clear();

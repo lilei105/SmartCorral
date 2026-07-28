@@ -17,8 +17,12 @@ public static class ShortcutService
     private static readonly string DataDir = Path.Combine(AppContext.BaseDirectory, "data");
     private static readonly string ShortcutsDir = Path.Combine(DataDir, "shortcuts");
 
-    /// <summary>Imports a dropped file as a shortcut under data/shortcuts/. Returns the path relative to data/.</summary>
-    public static string Import(string sourcePath, string displayName)
+    /// <summary>Imports a dropped file as a shortcut under data/shortcuts/. Returns the path relative to data/.
+    /// For a raw file/folder (not a .lnk/.url), the freshly-created wrapper .lnk points at
+    /// <paramref name="targetOverride"/> when given (its custody path) instead of the original desktop
+    /// path — so the shortcut keeps working once the original is moved into custody. .lnk/.url originals
+    /// are copied verbatim (their own target is independent of custody), so the override is ignored.</summary>
+    public static string Import(string sourcePath, string displayName, string? targetOverride = null)
     {
         Directory.CreateDirectory(ShortcutsDir);
 
@@ -36,10 +40,33 @@ public static class ShortcutService
         }
         else
         {
-            CreateNewLnk(abs, sourcePath);
+            CreateNewLnk(abs, string.IsNullOrEmpty(targetOverride) ? sourcePath : targetOverride);
         }
 
         return Path.Combine("shortcuts", fileName);
+    }
+
+    /// <summary>Re-points an existing wrapper .lnk at a new target (used at startup when RetakeAll moves
+    /// a raw file/folder to a fresh custody path for this session). No-op for .url or missing files.</summary>
+    public static void Retarget(string relativePath, string newTarget)
+    {
+        try
+        {
+            string abs = Path.Combine(DataDir, relativePath);
+            if (!File.Exists(abs)) return;
+            if (relativePath.EndsWith(".url", StringComparison.OrdinalIgnoreCase)) return;
+
+            Type t = Type.GetTypeFromProgID("WScript.Shell")!;
+            dynamic shell = Activator.CreateInstance(t)!;
+            dynamic sc = shell.CreateShortcut(abs);
+            sc.TargetPath = newTarget;
+            if (Directory.Exists(newTarget)) sc.WorkingDirectory = newTarget;
+            sc.Save();
+        }
+        catch
+        {
+            // best-effort
+        }
     }
 
     /// <summary>Resolves a shortcut to its target path (for icon extraction), or string.Empty.</summary>
