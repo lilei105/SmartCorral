@@ -90,11 +90,15 @@ public partial class App : Application
     private void ReorganizeAll()
     {
         Logger.Info("Tray: 'AI re-categorize' requested.");
+        // Tell the user it's working right away — the LLM call + filing can take ~10–15 s, which
+        // otherwise reads as "nothing happened".
+        _tray?.Balloon("AI 分类中", "正在用 AI 重新分类桌面（约 10–15 秒）…");
         // ClearAll restores every custodied item to the desktop first, then wipes frames/shortcuts —
         // so the desktop is repopulated before the AI re-scan (otherwise it'd scan an empty desktop and
         // orphan everything in custody). RunAsync then re-categorizes and re-takes each item.
         _frames?.ClearAll();
-        if (_frames != null) _ = AiOrganizeService.RunAsync(_frames, _settings);
+        if (_frames != null)
+            _ = AiOrganizeService.RunAsync(_frames, _settings, onResult: (msg, err) => _tray?.Balloon("AI 分类", msg, warn: err));
     }
 
     /// <summary>Tray "Restore all files" panic button: move every custodied item back to its desktop

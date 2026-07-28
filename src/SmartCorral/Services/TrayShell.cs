@@ -43,6 +43,14 @@ public sealed class TrayShell : IDisposable
         _icon.ContextMenuStrip = menu;
     }
 
+    /// <summary>Shows a tray balloon (toast). Used for AI progress/result so a ~15 s categorize run
+    /// isn't silent. <paramref name="warn"/> picks the icon (warning vs info).</summary>
+    public void Balloon(string title, string text, bool warn = false)
+    {
+        try { _icon.ShowBalloonTip(2500, title, text, warn ? ToolTipIcon.Warning : ToolTipIcon.Info); }
+        catch { /* best-effort */ }
+    }
+
     public void Dispose()
     {
         _icon.Visible = false;
