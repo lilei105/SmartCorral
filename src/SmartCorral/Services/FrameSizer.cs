@@ -6,13 +6,13 @@ namespace SmartCorral.Services;
 /// Picks frame width/height from a chosen icons-per-row count. Constants are calibrated to the
 /// actual layout: item button = 76 + 8 margin = 84px; overhead = RootBorder(20) + WrapPanel(20)
 /// + slack(4) = 44px horizontally; title(42) + margins/padding + slack = 90px chrome vertically;
-/// ~64px per icon row.
+/// ~74px per icon row (40px icon + label + margins).
 /// </summary>
 public static class FrameSizer
 {
     private const double PerItemWidth = 84;
     private const double WidthOverhead = 44;
-    private const double RowPitchY = 64;
+    private const double RowPitchY = 74;
     private const double Chrome = 90;
     private const double MinHeight = 150; // ensures a single icon row never overflows into a scrollbar
     private const double MaxHeight = 1000;

@@ -116,8 +116,8 @@ public partial class FrameWindow
         var icon = new Image
         {
             Source = IconService.GetIconForShortcutFile(ShortcutService.AbsolutePath(item.Filename), showArrow),
-            Width = 32,
-            Height = 32,
+            Width = 40,
+            Height = 40,
             HorizontalAlignment = HorizontalAlignment.Center
         };
         var label = new TextBlock
@@ -126,7 +126,7 @@ public partial class FrameWindow
             MaxWidth = 72,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = Brushes.White,
-            FontSize = 11,
+            FontSize = 12,
             Margin = new Thickness(0, 3, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center
         };
@@ -214,8 +214,11 @@ public partial class FrameWindow
         if (_dragging)
         {
             Point cur = PointToScreen(e.GetPosition(this));
-            double dx = (cur.X - _dragOriginScreen.X) / MonitorService.DpiScaleX;
-            double dy = (cur.Y - _dragOriginScreen.Y) / MonitorService.DpiScaleY;
+            // Use THIS frame's current DPI, not the shared MonitorService scale: the latter can be
+            // stale/wrong when several frames sit on monitors of different DPI (PerMonitorV2 app).
+            var dpi = VisualTreeHelper.GetDpi(this);
+            double dx = (cur.X - _dragOriginScreen.X) / dpi.DpiScaleX;
+            double dy = (cur.Y - _dragOriginScreen.Y) / dpi.DpiScaleY;
             double nl = _dragOriginLeft + dx;
             double nt = _dragOriginTop + dy;
             var (sx, sy, snapX, snapY) = Snap(nl, nt);
@@ -228,8 +231,9 @@ public partial class FrameWindow
         else if (_resizing)
         {
             Point cur = PointToScreen(e.GetPosition(this));
-            double dx = (cur.X - _resizeStartScreen.X) / MonitorService.DpiScaleX;
-            double dy = (cur.Y - _resizeStartScreen.Y) / MonitorService.DpiScaleY;
+            var dpi = VisualTreeHelper.GetDpi(this);
+            double dx = (cur.X - _resizeStartScreen.X) / dpi.DpiScaleX;
+            double dy = (cur.Y - _resizeStartScreen.Y) / dpi.DpiScaleY;
             double rawRight = _resizeStartLeft + _resizeStartWidth + dx;
             double rawBottom = _resizeStartTop + _resizeStartHeight + dy;
             var (sr, sb, snapR, snapB) = SnapResize(rawRight, rawBottom);

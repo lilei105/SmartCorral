@@ -54,7 +54,7 @@
                     MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
                 <Grid Margin="14,0">
                     <TextBlock x:Name="TitleText"
-                               FontSize="13" FontWeight="SemiBold"
+                               FontSize="14" FontWeight="SemiBold"
                                Foreground="#FFE8E8F0"
                                VerticalAlignment="Center" />
                     <Button x:Name="CloseBtn"
