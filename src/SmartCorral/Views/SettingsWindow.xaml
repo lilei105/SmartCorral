@@ -52,6 +52,15 @@
                 <CheckBox x:Name="SeparateFoldersBox" Content="Separate folders onto their own row"
                           FontSize="12" Foreground="#FFE8E8F0" Margin="0,0,0,16" />
 
+                <TextBlock Text="图标 / 文字大小 (icon, label)" FontSize="11" Foreground="#FFB7B7C6" Margin="0,0,0,3" />
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
+                    <Slider x:Name="UIScaleSlider" Width="220" Minimum="0.8" Maximum="1.3"
+                            TickFrequency="0.05" IsSnapToTickEnabled="True" Value="1"
+                            VerticalAlignment="Center" ValueChanged="UIScaleSlider_ValueChanged" />
+                    <TextBlock x:Name="UIScaleValue" Text="100%" FontSize="11" Foreground="#FFB7B7C6"
+                               Margin="10,0,0,0" VerticalAlignment="Center" />
+                </StackPanel>
+
                 <!-- ===== 行为 / Behavior ===== -->
                 <TextBlock Text="行为 / Behavior" FontSize="13" FontWeight="Bold" Foreground="#FF8FA0FF" Margin="0,0,0,8" />
                 <CheckBox x:Name="ForceTopmostBox" Content="Keep frames always on top"

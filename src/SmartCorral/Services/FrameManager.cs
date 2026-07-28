@@ -24,6 +24,14 @@ public class FrameManager
     /// <summary>Keep frames always-on-top (true) or obey normal z-order so other windows can cover them (false).</summary>
     public bool ForceTopmost { get; set; } = true;
 
+    /// <summary>UI zoom for frame contents; on set, syncs into FrameSizer.Scale (drives icon/label/title/sizing).</summary>
+    public double UIScale
+    {
+        get => _uiScale;
+        set { _uiScale = value; FrameSizer.Scale = Math.Clamp(value, 0.8, 1.3); }
+    }
+    private double _uiScale = 1.0;
+
     private readonly System.Collections.Generic.Dictionary<System.Guid, FrameWindow> _windows = new();
 
     public void Initialize()

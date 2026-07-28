@@ -97,6 +97,7 @@ public partial class FrameWindow
     // ---- items ----
     public void RenderItems()
     {
+        TitleText.FontSize = FrameSizer.TitleFont;
         IconsPanel.Children.Clear();
         FoldersPanel.Children.Clear();
 
@@ -127,17 +128,17 @@ public partial class FrameWindow
         var icon = new Image
         {
             Source = IconService.GetIconForShortcutFile(ShortcutService.AbsolutePath(item.Filename), showArrow),
-            Width = 40,
-            Height = 40,
+            Width = FrameSizer.IconSize,
+            Height = FrameSizer.IconSize,
             HorizontalAlignment = HorizontalAlignment.Center
         };
         var label = new TextBlock
         {
             Text = item.DisplayName,
-            MaxWidth = 72,
+            MaxWidth = FrameSizer.LabelMaxWidth,
             TextTrimming = TextTrimming.CharacterEllipsis,
             Foreground = Brushes.White,
-            FontSize = 12,
+            FontSize = FrameSizer.ItemFont,
             Margin = new Thickness(0, 3, 0, 0),
             HorizontalAlignment = HorizontalAlignment.Center
         };
@@ -147,7 +148,7 @@ public partial class FrameWindow
 
         var btn = new Button
         {
-            Width = 76,
+            Width = FrameSizer.ButtonWidth,
             Margin = new Thickness(4),
             Background = Brushes.Transparent,
             BorderThickness = new Thickness(0),

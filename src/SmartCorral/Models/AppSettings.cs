@@ -20,4 +20,7 @@ public class AppSettings
 
     /// <summary>Keep frames always-on-top of other windows. Turn off so other windows can cover them.</summary>
     public bool ForceTopmost { get; set; } = true;
+
+    /// <summary>Frame UI zoom (icon + label + title + frame sizing together). 1.0 = default; 0.8–1.3.</summary>
+    public double UIScale { get; set; } = 1.0;
 }

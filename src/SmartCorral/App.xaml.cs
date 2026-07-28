@@ -36,6 +36,7 @@ public partial class App : Application
         _frames.IconsPerRow = _settings.IconsPerRow;
         _frames.SeparateFolders = _settings.SeparateFolders;
         _frames.ForceTopmost = _settings.ForceTopmost;
+        _frames.UIScale = _settings.UIScale;
         _frames.Initialize();
 
         // 5. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
@@ -62,6 +63,7 @@ public partial class App : Application
             _frames.SeparateFolders = _settings.SeparateFolders;
             _frames.ForceTopmost = _settings.ForceTopmost;
             _frames.ApplyTopmost();
+            _frames.UIScale = _settings.UIScale;
             _frames.SizeFramesToContent();
             _frames.RefreshAll();
             _frames.ArrangeAll();
