@@ -5,5 +5,70 @@
              Startup="App_OnStartup"
              Exit="App_OnExit">
     <Application.Resources>
+        <!-- Dark-theme dropdown items (dark row + light text). -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Foreground" Value="#FFE8E8F0"/>
+            <Setter Property="Background" Value="#FF2A2A3C"/>
+            <Setter Property="Padding" Value="10,5"/>
+        </Style>
+
+        <!-- Dark-theme ComboBox: replaces the default template whose content area and popup are
+             white (white-on-white text + white gaps between dark rows). Everything here is dark. -->
+        <Style TargetType="ComboBox">
+            <Setter Property="Foreground" Value="#FFE8E8F0"/>
+            <Setter Property="Background" Value="#FF2A2A3C"/>
+            <Setter Property="BorderBrush" Value="#44FFFFFF"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="10,0,24,0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                SnapsToDevicePixels="True">
+                            <Grid>
+                                <!-- transparent click target that toggles the dropdown -->
+                                <ToggleButton x:Name="ToggleButton" Focusable="False" ClickMode="Press"
+                                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                    <ToggleButton.Template>
+                                        <ControlTemplate TargetType="ToggleButton">
+                                            <Border Background="Transparent"/>
+                                        </ControlTemplate>
+                                    </ToggleButton.Template>
+                                </ToggleButton>
+                                <!-- selected item text (closed state) -->
+                                <ContentPresenter IsHitTestVisible="False"
+                                                  Margin="{TemplateBinding Padding}"
+                                                  VerticalAlignment="Center" HorizontalAlignment="Left"
+                                                  Content="{TemplateBinding SelectionBoxItem}"
+                                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"/>
+                                <!-- dropdown arrow -->
+                                <Path x:Name="Arrow" Data="M 0 0 L 8 0 L 4 4 Z" Fill="#FFB7B7C6"
+                                      IsHitTestVisible="False"
+                                      HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                                <!-- dropdown popup (dark container, no white gaps) -->
+                                <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                                       IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                                       PopupAnimation="Slide">
+                                    <Border Background="#FF2A2A3C" BorderBrush="#44FFFFFF" BorderThickness="1"
+                                            MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                            MaxHeight="{TemplateBinding MaxDropDownHeight}" SnapsToDevicePixels="True">
+                                        <ScrollViewer Padding="0">
+                                            <StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Contained"/>
+                                        </ScrollViewer>
+                                    </Border>
+                                </Popup>
+                            </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger SourceName="ToggleButton" Property="IsChecked" Value="True">
+                                <Setter TargetName="Arrow" Property="Fill" Value="#FF5B6CFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Application.Resources>
 </Application>
