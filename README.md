@@ -49,7 +49,15 @@ dotnet build "src/SmartCorral/SmartCorral.csproj" -p:Configuration=Debug -restor
 "src/SmartCorral/bin/Debug/net10.0-windows/SmartCorral.exe"
 ```
 
-> 后续会提供免安装的单文件自包含发布版本（打包中）。
+### 生成免安装单文件版（自包含）
+
+```bash
+dotnet publish "src/SmartCorral/SmartCorral.csproj" -c Release -r win-x64 \
+  --self-contained -p:PublishSingleFile=true \
+  -p:IncludeNativeLibrariesForSelfExtract=true -p:EnableCompressionInSingleFile=true
+```
+
+产出在 `src/SmartCorral/bin/Release/net10.0-windows/win-x64/publish/SmartCorral.exe`——单个约 72MB 的 exe，**无需安装、无需另装 .NET 运行时**，拷到任意目录双击即可运行；围栏框/配置数据存在它旁边的 `data/`，便携。
 
 ---
 
@@ -91,7 +99,7 @@ dotnet build "src/SmartCorral/SmartCorral.csproj" -p:Configuration=Debug -restor
 
 - **文件不移动**：程序只读你的桌面文件名来分类，并创建快捷方式；从不移动、复制或上传你的文件内容。
 - **数据本地化**：围栏框布局、设置、快捷方式都存在程序目录下的 `data/`，便携、不进注册表。
-- **API Key 本地存储**：目前明文存在 `data/settings.json`（后续会做 DPAPI 加密）。用本地 Ollama 则无需任何 Key。
+- **API Key 本地存储**：用 DPAPI（绑定当前 Windows 用户）加密后存在 `data/settings.json`，换用户或换机器无法解密。用本地 Ollama 则无需任何 Key。
 
 ---
 

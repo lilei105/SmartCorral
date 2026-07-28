@@ -19,7 +19,7 @@ public sealed class TrayShell : IDisposable
     {
         _icon = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = AppIcon(),
             Text = "灵栅 / Smart Corral",
             Visible = true
         };
@@ -37,5 +37,12 @@ public sealed class TrayShell : IDisposable
     {
         _icon.Visible = false;
         _icon.Dispose();
+    }
+
+    /// <summary>The app's own icon (embedded via &lt;ApplicationIcon&gt;), with a system fallback.</summary>
+    private static Icon AppIcon()
+    {
+        try { return Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? SystemIcons.Application; }
+        catch { return SystemIcons.Application; }
     }
 }

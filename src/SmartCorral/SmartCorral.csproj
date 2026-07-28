@@ -10,6 +10,7 @@
     <RootNamespace>SmartCorral</RootNamespace>
     <AssemblyName>SmartCorral</AssemblyName>
     <Version>0.1.0</Version>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- Per-Monitor v2 DPI awareness is set in CODE (Interop/DpiBootstrap, a module initializer),
          not here: the WPF-generated Main never calls ApplicationConfiguration.Initialize(), and with
          WinForms enabled the SDK strips dpiAwareness from the manifest (WFO0003) anyway. -->
