@@ -22,6 +22,7 @@ public partial class SettingsWindow : Window
         IconsPerRowBox.SelectedIndex = (idx >= 0 && idx < IconsPerRowBox.Items.Count) ? idx : 1; // default 3
         SeparateFoldersBox.IsChecked = settings.SeparateFolders;
         ForceTopmostBox.IsChecked = settings.ForceTopmost;
+        EnableLoggingBox.IsChecked = settings.EnableLogging;
         UIScaleSlider.Value = Math.Clamp(settings.UIScale, 0.8, 1.3);
     }
 
@@ -33,6 +34,7 @@ public partial class SettingsWindow : Window
         _settings.IconsPerRow = (IconsPerRowBox.SelectedIndex >= 0 ? IconsPerRowBox.SelectedIndex + 2 : 3);
         _settings.SeparateFolders = SeparateFoldersBox.IsChecked == true;
         _settings.ForceTopmost = ForceTopmostBox.IsChecked == true;
+        _settings.EnableLogging = EnableLoggingBox.IsChecked == true;
         _settings.UIScale = UIScaleSlider.Value;
         PersistenceService.SaveSettings(_settings);
         DialogResult = true;

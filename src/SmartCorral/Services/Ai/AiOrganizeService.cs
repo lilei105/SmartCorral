@@ -17,17 +17,21 @@ public static class AiOrganizeService
 {
     public static async Task RunAsync(FrameManager frames, AppSettings settings)
     {
+        bool hasKey = !string.IsNullOrWhiteSpace(settings.AiApiKey);
         bool configured = !string.IsNullOrWhiteSpace(settings.AiModel) &&
-                          (!string.IsNullOrWhiteSpace(settings.AiApiKey) || IsLocalEndpoint(settings.AiBaseUrl));
-        if (!configured) return;
+                          (hasKey || IsLocalEndpoint(settings.AiBaseUrl));
+        Logger.Info($"AI organize start: configured={configured} (model='{settings.AiModel}', key={(hasKey ? "set" : "missing")}, base='{settings.AiBaseUrl}')");
+        if (!configured) { Logger.Warn("AI organize: not configured — skipping."); return; }
 
         // 1. Scan desktop (files + folders, no COM) off-thread.
         var allFiles = await Task.Run(DesktopScanner.Scan);
+        Logger.Info($"AI organize: scanned {allFiles.Count} desktop item(s).");
 
         // 2. Skip files already imported into a frame.
         var existing = new HashSet<string>(frames.AllItemSourcePaths(), StringComparer.OrdinalIgnoreCase);
         var toCategorize = allFiles.Where(f => !existing.Contains(f.FullPath)).ToList();
-        if (toCategorize.Count == 0) return;
+        Logger.Info($"AI organize: {toCategorize.Count} to categorize ({allFiles.Count - toCategorize.Count} already filed).");
+        if (toCategorize.Count == 0) { Logger.Info("AI organize: nothing to do."); return; }
 
         // 3. Categorize via LLM (off-thread) — index-keyed so name echo can't mismatch.
         Dictionary<int, string> assignments;
@@ -36,15 +40,18 @@ public static class AiOrganizeService
             using var llm = new LlmClient(settings.AiBaseUrl, settings.AiApiKey, settings.AiModel);
             assignments = await AiCategorizer.CategorizeAsync(llm, toCategorize);
         }
-        catch
+        catch (Exception ex)
         {
-            return; // network/LLM failure — silently skip; desktop stays manual.
+            Logger.Error("AI organize: LLM call failed — desktop stays manual.", ex);
+            return;
         }
-        if (assignments.Count == 0) return;
+        Logger.Info($"AI organize: model categorized {assignments.Count}/{toCategorize.Count} item(s).");
+        if (assignments.Count == 0) { Logger.Warn("AI organize: model returned no categories."); return; }
 
         // 4. Apply on the UI thread (frame creation + COM shortcut import + render).
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
+            int applied = 0;
             for (int i = 0; i < toCategorize.Count; i++)
             {
                 if (!assignments.TryGetValue(i + 1, out string? category))
@@ -54,7 +61,9 @@ public static class AiOrganizeService
                 var frame = frames.EnsureCategoryFrame(category);
                 frames.AddDesktopFile(frame, file.FullPath, file.DisplayName);
                 frames.Refresh(frame);
+                applied++;
             }
+            Logger.Info($"AI organize: filed {applied} item(s) into frames.");
             frames.RemoveEmptyDefaultFrames();
             frames.SizeFramesToContent();
             frames.ArrangeAll();   // right-aligned grid + persist

@@ -23,4 +23,8 @@ public class AppSettings
 
     /// <summary>Frame UI zoom (icon + label + title + frame sizing together). 1.0 = default; 0.8–1.3.</summary>
     public double UIScale { get; set; } = 1.0;
+
+    /// <summary>Write a timestamped trace to data/smartcorral.log (lifecycle, custody moves, AI pipeline
+    /// + errors). Default on so problems are captured without a settings round-trip.</summary>
+    public bool EnableLogging { get; set; } = true;
 }

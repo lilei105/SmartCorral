@@ -51,7 +51,16 @@ public sealed class LlmClient : IDisposable
         }
 
         using var resp = await _http.SendAsync(req, cts.Token);
-        resp.EnsureSuccessStatusCode();
+        if (!resp.IsSuccessStatusCode)
+        {
+            // EnsureSuccessStatusCode throws with only the status code, hiding WHY (e.g. an unsupported
+            // response_format, bad model, auth). Read the body and surface it — both in the log and in
+            // the exception — so a silent "nothing happened" becomes a diagnosable error.
+            string errBody = await ReadSafeAsync(resp.Content, cts.Token);
+            string snippet = errBody.Length > 600 ? errBody[..600] + "…" : errBody;
+            Logger.Error($"LLM HTTP {(int)resp.StatusCode} {resp.ReasonPhrase} ({_endpoint})  body: {snippet}");
+            throw new HttpRequestException($"LLM {(int)resp.StatusCode} {resp.ReasonPhrase}: {snippet}");
+        }
 
         string body = await resp.Content.ReadAsStringAsync(cts.Token);
         using var doc = JsonDocument.Parse(body);
@@ -60,6 +69,12 @@ public sealed class LlmClient : IDisposable
             .GetProperty("message")
             .GetProperty("content")
             .GetString();
+    }
+
+    private static async Task<string> ReadSafeAsync(HttpContent content, CancellationToken ct)
+    {
+        try { return await content.ReadAsStringAsync(ct); }
+        catch { return "(unreadable body)"; }
     }
 
     public void Dispose() => _http.Dispose();

@@ -24,6 +24,9 @@ public partial class App : Application
             return;
         }
 
+        Logger.TrimIfNeeded();
+        Logger.Info("=== Smart Corral starting ===");
+
         // 2. ONE-TIME legacy recovery: if an older build left the icons globally hidden, restore them.
         //    The custody model clears the desktop per-item now — there is no global hide anymore.
         DesktopShell.RecoverLegacyHide();
@@ -34,6 +37,8 @@ public partial class App : Application
 
         // 4. Load settings + tray
         _settings = PersistenceService.LoadSettings();
+        Logger.Enabled = _settings.EnableLogging;
+        Logger.Info($"Settings loaded (logging={Logger.Enabled}, AI model='{_settings.AiModel}').");
         _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll(), ReorganizeAll, RestoreAllFiles);
 
         // 5. Load frames + show windows, then re-custody everything already filed (RestoreAll put the
@@ -47,16 +52,18 @@ public partial class App : Application
         _frames.Initialize();
         _frames.RetakeAllIntoCustody();
         _frames.RefreshAll();
+        Logger.Info($"Startup ready: {_frames.Data.Frames.Count} frame(s).");
 
         // 6. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
         _ = AiOrganizeService.RunAsync(_frames, _settings);
 
         // Best-effort restore on a hard exit; RestoreAll at next launch covers anything this misses.
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => CustodyService.RestoreAll();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => { Logger.Info("ProcessExit: RestoreAll."); CustodyService.RestoreAll(); };
     }
 
     private void App_OnExit(object sender, ExitEventArgs e)
     {
+        Logger.Info("=== Smart Corral exiting (clean) — persist + RestoreAll ===");
         _frames?.Persist();
         CustodyService.RestoreAll(); // clean exit → desktop fully restored, manifest cleared
         _tray?.Dispose();
@@ -68,6 +75,7 @@ public partial class App : Application
         bool? ok = w.ShowDialog();
         if (ok == true && _frames != null)
         {
+            Logger.Enabled = _settings.EnableLogging; // pick up the toggle immediately
             _frames.IconsPerRow = _settings.IconsPerRow;
             _frames.SeparateFolders = _settings.SeparateFolders;
             _frames.ForceTopmost = _settings.ForceTopmost;
@@ -81,6 +89,7 @@ public partial class App : Application
 
     private void ReorganizeAll()
     {
+        Logger.Info("Tray: 'AI re-categorize' requested.");
         // ClearAll restores every custodied item to the desktop first, then wipes frames/shortcuts —
         // so the desktop is repopulated before the AI re-scan (otherwise it'd scan an empty desktop and
         // orphan everything in custody). RunAsync then re-categorizes and re-takes each item.
@@ -93,6 +102,7 @@ public partial class App : Application
     /// the app looks like a fresh start. A confirm first spells out that frame groupings are cleared.</summary>
     private void RestoreAllFiles()
     {
+        Logger.Info("Tray: 'Restore all files' requested.");
         var rc = MessageBox.Show(
             "把所有文件还原回桌面？\n\n框里的归类会被清空（文件不会丢）。之后可重新拖入，或用「AI 重新归类」。",
             "还原所有文件 / Restore all files",

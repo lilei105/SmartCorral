@@ -76,15 +76,18 @@ public static class CustodyService
                 // Move failed or didn't land — roll back the pending entry and leave the item on the desktop.
                 manifest.RemoveAll(e => PathEquals(e.OriginalPath, originalAbs));
                 SaveManifest(manifest);
+                Logger.Warn($"Take FAILED (kept on desktop): \"{originalAbs}\"");
                 return originalAbs;
             }
 
             entry.Done = true;
             SaveManifest(manifest);
+            Logger.Info($"Take OK: \"{Path.GetFileName(originalAbs.TrimEnd('\\', '/'))}\" -> custody");
             return custodyPath;
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Error($"Take threw on \"{originalAbs}\"", ex);
             return originalAbs; // custody must never crash the app
         }
     }
@@ -97,6 +100,7 @@ public static class CustodyService
         {
             var manifest = LoadManifest();
             if (manifest.Count == 0) return;
+            Logger.Info($"RestoreAll: {manifest.Count} item(s) to restore.");
 
             var remaining = new List<CustodyEntry>();
             foreach (var entry in manifest)
@@ -105,10 +109,11 @@ public static class CustodyService
                     remaining.Add(entry); // keep failed entries — they retry next launch, never silently dropped
             }
             SaveManifest(remaining);
+            Logger.Info($"RestoreAll: restored {manifest.Count - remaining.Count}, {remaining.Count} kept for retry.");
         }
-        catch
+        catch (Exception ex)
         {
-            // best-effort; next launch retries
+            Logger.Error("RestoreAll threw", ex);
         }
     }
 
@@ -164,12 +169,18 @@ public static class CustodyService
             {
                 string target = UniqueTarget(dir, name, isDir);
                 if (Move(custody, target, isDir) && (File.Exists(target) || Directory.Exists(target)))
+                {
+                    if (!string.Equals(dir, origDir, StringComparison.OrdinalIgnoreCase))
+                        Logger.Warn($"Restore: \"{name}\" original dir unwritable — fell back to {target}");
                     return true;
+                }
             }
+            Logger.Warn($"Restore FAILED (kept in custody for retry): \"{name}\"");
             return false; // all candidates failed (e.g. locked) — keep entry, retry next launch
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Error($"Restore threw on \"{entry.OriginalPath}\"", ex);
             return false;
         }
     }

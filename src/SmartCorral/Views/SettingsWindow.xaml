@@ -66,6 +66,9 @@
                 <CheckBox x:Name="ForceTopmostBox" Content="Keep frames always on top"
                           FontSize="12" Foreground="#FFE8E8F0" Margin="0,0,0,10" />
 
+                <CheckBox x:Name="EnableLoggingBox" Content="Enable logging (writes data/smartcorral.log)"
+                          FontSize="12" Foreground="#FFE8E8F0" Margin="0,0,0,10" />
+
                 <!-- New settings: add below, grouped. The window auto-grows and scrolls past MaxHeight. -->
 
             </StackPanel>
