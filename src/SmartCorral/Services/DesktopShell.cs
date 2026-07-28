@@ -5,15 +5,18 @@ using SmartCorral.Services.Platform;
 namespace SmartCorral.Services;
 
 /// <summary>
-/// Owns the "session tidy" of the desktop: hides native icons while Smart Corral runs and restores
-/// them on exit. Hiding uses the OS "Show desktop icons" toggle (DesktopIconHider.ToggleDesktopIcons),
-/// which keeps the desktop list-view active so rubber-band drag-selection still works.
+/// Owns the "session tidy" of the desktop: hides native icons while Smart Corral is actively
+/// organizing (there are items in frames) and restores them on exit. Hiding uses the OS "Show
+/// desktop icons" toggle (DesktopIconHider.ToggleDesktopIcons), which keeps the desktop list-view
+/// active so rubber-band drag-selection still works.
 ///
-/// That toggle FLIPS state rather than setting it, so we track absolute state with a flag file:
-/// every hide writes the flag with content "toggle"; every restore (clean shutdown or next-launch
-/// crash recovery) toggles once and clears it. Only a "toggle" flag means icons are natively
-/// hidden and need a recovery toggle — a stale "hidden" flag is the old SW_HIDE mechanism (handled
-/// by ShowDesktopListView), so it's just cleared.
+/// Icons are NOT hidden on a fresh/empty run — that way the user can see their desktop, read the
+/// tip on the empty frame, and drag files in (or configure AI). Hiding kicks in the moment the
+/// first item lands in a frame (Hide()).
+///
+/// The toggle FLIPS state, so absolute state is tracked with a flag file (content "toggle"): every
+/// hide writes it; every restore (clean shutdown or next-launch crash recovery) toggles once and
+/// clears it. Icons always come back — even after a hard crash — without double-toggling.
 /// </summary>
 public static class DesktopShell
 {
@@ -21,18 +24,19 @@ public static class DesktopShell
     private static readonly string FlagFile = Path.Combine(DataDir, ".icons_hidden");
     private const string ToggleFlag = "toggle";
 
-    public static void Startup()
+    /// <summary>Call at startup. If <paramref name="hide"/> is true, hides the icons now (there's
+    /// content to organize); otherwise leaves them visible (fresh/empty run). Always undoes any
+    /// leftover SW_HIDE and recovers from a prior crash.</summary>
+    public static void Startup(bool hide)
     {
         try
         {
             Directory.CreateDirectory(DataDir);
 
-            // Make sure the list-view window itself is shown — undoes any leftover SW_HIDE from the
-            // old hiding method so the native toggle below keeps drag-selection working.
+            // Undo any leftover SW_HIDE from the old hiding method so the native toggle keeps drag-select.
             DesktopIconHider.ShowDesktopListView();
 
-            // Crash recovery: only a "toggle" flag means icons are natively hidden now. (A stale
-            // "hidden" flag is from the old SW_HIDE method; ShowDesktopListView already fixed that.)
+            // Crash recovery: only a "toggle" flag means icons are natively hidden now.
             if (File.Exists(FlagFile))
             {
                 bool nativelyHidden = File.ReadAllText(FlagFile).Trim() == ToggleFlag;
@@ -41,9 +45,7 @@ public static class DesktopShell
                     DesktopIconHider.ToggleDesktopIcons(); // restore to visible
             }
 
-            // Hide for this session (one toggle). Arm the flag so a crash can self-heal next launch.
-            if (DesktopIconHider.ToggleDesktopIcons())
-                File.WriteAllText(FlagFile, ToggleFlag);
+            if (hide) Hide();
         }
         catch
         {
@@ -51,8 +53,20 @@ public static class DesktopShell
         }
     }
 
-    /// <summary>Restores icons to visible — only if we hid them (flag set), to avoid toggling
-    /// when we never did. Idempotent: safe to call multiple times.</summary>
+    /// <summary>Hides the icons if not already hidden (idempotent). Called when the first item
+    /// lands in a frame — the transition from "empty/welcome" to "organizing".</summary>
+    public static void Hide()
+    {
+        try
+        {
+            if (File.Exists(FlagFile)) return; // already hidden this session
+            if (DesktopIconHider.ToggleDesktopIcons())
+                File.WriteAllText(FlagFile, ToggleFlag);
+        }
+        catch { }
+    }
+
+    /// <summary>Restores icons to visible — only if we hid them (flag set). Idempotent.</summary>
     public static void Shutdown()
     {
         try
@@ -63,9 +77,6 @@ public static class DesktopShell
                 File.Delete(FlagFile);
             }
         }
-        catch
-        {
-            // best-effort
-        }
+        catch { }
     }
 }

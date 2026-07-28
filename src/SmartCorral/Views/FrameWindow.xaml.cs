@@ -102,6 +102,7 @@ public partial class FrameWindow
         FoldersPanel.Children.Clear();
 
         var ordered = _frame.Items.OrderBy(i => i.DisplayOrder).ToList();
+        EmptyHint.Visibility = ordered.Count == 0 ? Visibility.Visible : Visibility.Collapsed;
         if (_mgr.SeparateFolders)
         {
             foreach (var item in ordered.Where(i => !i.IsFolder))

@@ -28,16 +28,18 @@ public partial class App : Application
         _settings = PersistenceService.LoadSettings();
         _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll(), ReorganizeAll);
 
-        // 3. Take over the desktop: hide native icons (restore on exit; crash-recover on next launch).
-        DesktopShell.Startup();
-
-        // 4. Load frames + show windows
+        // 3. Load frames + show windows
         _frames = new FrameManager();
         _frames.IconsPerRow = _settings.IconsPerRow;
         _frames.SeparateFolders = _settings.SeparateFolders;
         _frames.ForceTopmost = _settings.ForceTopmost;
         _frames.UIScale = _settings.UIScale;
         _frames.Initialize();
+
+        // 4. Hide native desktop icons only once there's something organized. On a fresh/empty run
+        //    we leave the icons visible + show a tip so the user can drag files in or configure AI
+        //    first; hiding kicks in as soon as the first item lands in a frame (restore on exit).
+        DesktopShell.Startup(_frames.HasAnyItems());
 
         // 5. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
         _ = AiOrganizeService.RunAsync(_frames, _settings);

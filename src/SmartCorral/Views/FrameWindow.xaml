@@ -72,6 +72,14 @@
                 <StackPanel x:Name="ContentStack" Margin="10">
                     <WrapPanel x:Name="IconsPanel" MinWidth="100" />
                     <WrapPanel x:Name="FoldersPanel" MinWidth="100" Margin="0,8,0,0" Visibility="Collapsed" />
+
+                    <!-- Shown when the frame has no items (fresh run / just-created frame). -->
+                    <TextBlock x:Name="EmptyHint" Visibility="Collapsed" HorizontalAlignment="Center"
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="260" Margin="8,22,8,22">
+                        <Run Text="👋 灵栅帮你整理桌面" FontSize="16" FontWeight="SemiBold" Foreground="#FFE8E8F0"/><LineBreak/><LineBreak/>
+                        <Run Text="把桌面上的文件拖进这个框，就能开始归类。" FontSize="13" Foreground="#FFE8E8F0"/><LineBreak/><LineBreak/>
+                        <Run Text="想更轻松一点？去托盘「⚙️ 设置」里填好 AI，剩下的交给灵栅。" FontSize="12" Foreground="#FFB7B7C6"/>
+                    </TextBlock>
                 </StackPanel>
             </ScrollViewer>
 

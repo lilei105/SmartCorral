@@ -85,6 +85,10 @@ public class FrameManager
         string target = ShortcutService.ResolveTarget(relative);
         if (string.IsNullOrEmpty(target)) target = fullPath;
 
+        // First item to land anywhere → transition from "empty/welcome" to "organizing": hide the
+        // native desktop icons now (until then they're visible so the user can drag them in).
+        bool wasEmpty = !HasAnyItems();
+
         frame.Items.Add(new FrameItem
         {
             Filename = relative,
@@ -95,6 +99,8 @@ public class FrameManager
             SourcePath = fullPath,
             DisplayOrder = frame.Items.Count
         });
+
+        if (wasEmpty) DesktopShell.Hide();
     }
 
     public void AddFrame()
@@ -135,6 +141,9 @@ public class FrameManager
             foreach (var it in f.Items)
                 if (!string.IsNullOrEmpty(it.SourcePath)) yield return it.SourcePath;
     }
+
+    /// <summary>True if any frame currently holds items (i.e. there's something organized).</summary>
+    public bool HasAnyItems() => Data.Frames.OfType<DataFrame>().Any(f => f.Items.Count > 0);
 
     /// <summary>Create-or-find a DataFrame whose title equals this category.</summary>
     public DataFrame EnsureCategoryFrame(string category)
