@@ -34,7 +34,7 @@ public partial class App : Application
 
         // 4. Load settings + tray
         _settings = PersistenceService.LoadSettings();
-        _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll(), ReorganizeAll);
+        _tray = new TrayShell(OpenSettings, () => _frames?.ArrangeAll(), ReorganizeAll, RestoreAllFiles);
 
         // 5. Load frames + show windows, then re-custody everything already filed (RestoreAll put the
         //    items back on the desktop; this moves each into a fresh custody path for THIS session and
@@ -86,5 +86,20 @@ public partial class App : Application
         // orphan everything in custody). RunAsync then re-categorizes and re-takes each item.
         _frames?.ClearAll();
         if (_frames != null) _ = AiOrganizeService.RunAsync(_frames, _settings);
+    }
+
+    /// <summary>Tray "Restore all files" panic button: move every custodied item back to its desktop
+    /// (ClearAll does the RestoreAll + wipes frames/shortcuts), then reopen one empty welcome frame so
+    /// the app looks like a fresh start. A confirm first spells out that frame groupings are cleared.</summary>
+    private void RestoreAllFiles()
+    {
+        var rc = MessageBox.Show(
+            "把所有文件还原回桌面？\n\n框里的归类会被清空（文件不会丢）。之后可重新拖入，或用「AI 重新归类」。",
+            "还原所有文件 / Restore all files",
+            MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel);
+        if (rc != MessageBoxResult.OK) return;
+
+        _frames?.ClearAll();   // RestoreAll (files → desktop, manifest cleared) + wipe frames/shortcuts
+        _frames?.AddFrame();   // reopen one empty welcome frame (so it's not a bare tray)
     }
 }

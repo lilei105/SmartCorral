@@ -16,7 +16,7 @@ public sealed class TrayShell : IDisposable
 {
     private readonly NotifyIcon _icon;
 
-    public TrayShell(Action onOpenSettings, Action onAutoArrange, Action onReorganizeAll)
+    public TrayShell(Action onOpenSettings, Action onAutoArrange, Action onReorganizeAll, Action onRestoreAllFiles)
     {
         _icon = new NotifyIcon
         {
@@ -32,6 +32,12 @@ public sealed class TrayShell : IDisposable
         menu.Items.Add("AI 重新归类 / Re-categorize all", null, (_, _) => onReorganizeAll());
         menu.Items.Add("整齐排列框 / Arrange frames", null, (_, _) => onAutoArrange());
         menu.Items.Add("⚙️ 设置 / Settings", null, (_, _) => onOpenSettings());
+        menu.Items.Add("-");
+        // Emergency "panic button" — red so it's easy to spot. Restores every custodied file to the
+        // desktop and clears the frames (a full reset); a confirm spells out the consequence first.
+        var restore = menu.Items.Add("⚠️ 还原所有文件 / Restore all files");
+        restore.ForeColor = Color.Red;
+        restore.Click += (_, _) => onRestoreAllFiles();
         menu.Items.Add("-");
         menu.Items.Add("退出 / Exit", null, (_, _) => WpfApp.Current?.Shutdown());
         _icon.ContextMenuStrip = menu;
