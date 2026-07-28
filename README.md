@@ -115,6 +115,7 @@ dotnet publish "src/SmartCorral/SmartCorral.csproj" -c Release -r win-x64 \
 ## 🛠️ 更多文档
 
 - 架构与设计：[DESIGN.md](./DESIGN.md)
+- 改进路线图（好看 / 好用 / AI 感）：[docs/roadmap.md](./docs/roadmap.md)
 - 开发踩坑与已知问题：[docs/development-pitfalls.md](./docs/development-pitfalls.md)
 
 ## 背景
