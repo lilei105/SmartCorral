@@ -55,13 +55,14 @@ See `DESIGN.md` for the full design doc. Key points:
 | `Services/TrayShell.cs` | WinForms NotifyIcon (Settings/Auto-arrange/Re-organize/Exit) |
 | `Views/FrameWindow.xaml(.cs)` | The frame: drag+snap, resize+snap, roll-up, lock, shell context menu, items render |
 | `Views/SettingsWindow.xaml(.cs)` | AI config + icons-per-row + separate-folders toggle |
-| `Interop/NonActivatingWindow.cs` | WS_EX_NOACTIVATE base class |
+| `Interop/NonActivatingWindow.cs` | WS_EX_NOACTIVATE base class + WM_DPICHANGED hook |
+| `Interop/DpiBootstrap.cs` | Module initializer → SetProcessDpiAwarenessContext (PerMonitorV2) |
 | `Interop/ShellContextMenu.cs` | Full system right-click menu via IContextMenu COM |
 | `Models/` | Frame, DataFrame, FrameItem, AppData, AppSettings |
 
 ## Conventions & gotchas
 
-- **WPF coords = DIP; Win32 coords = physical pixels.** PointToScreen returns physical pixels; Left/Top/Width/Height are DIP. Cross over: ÷ DpiScale (physical→DIP) or × DpiScale (DIP→physical). DpiScale captured per-frame at ContentRendered via MonitorService.
+- **WPF coords = DIP; Win32 coords = physical pixels.** PointToScreen returns physical pixels; Left/Top/Width/Height are DIP. Cross over: ÷ DpiScale (physical→DIP) or × DpiScale (DIP→physical). Process is PerMonitorV2 via `DpiBootstrap` (module initializer — manifest `dpiAwareness` and `<ApplicationHighDpiMode>` are BOTH inert for this WinForms-enabled WPF app). Drag/resize read the frame's own DPI via `VisualTreeHelper.GetDpi(this)`; the shared `MonitorService` scale is refreshed on `WM_DPICHANGED`. **Snap-guide coords must be physical pixels** (the overlay canvas is primary-DPI; a frame's Left/Top on another-DPI monitor are in that monitor's DIP space). Full detail: `docs/development-pitfalls.md`.
 - **Dispatcher mandatory** for UI mutation from background threads (FileSystemWatcher, AI apply).
 - **WinForms enabled ONLY for tray** (TrayShell). Removed from implicit usings so it doesn't clash with WPF types.
 - **ShortcutService.Import**: copies dropped .lnk/.url verbatim (preserves IconLocation/args); creates fresh .lnk for raw files/folders.
@@ -72,7 +73,7 @@ See `DESIGN.md` for the full design doc. Key points:
 
 ## DPI / multi-monitor
 
-Known issue (see `TODO.md`): DpiScaleX/Y captured once at ContentRendered. Moving a frame to a monitor with different DPI → stale scale → drag/resize speed mismatch. Fix: listen for WM_DPICHANGED.
+Done: process is Per-Monitor v2 (`DpiBootstrap`), `WM_DPICHANGED` refreshes the shared scale, drag/resize use per-frame DPI, snap guides use physical pixels. Open issue: frame **content can look slightly soft** on a different-DPI monitor after dragging — root cause not found (removing `AllowsTransparency` didn't fix it). Details: `docs/development-pitfalls.md` §2/§5.
 
 ## What's done (as of last session)
 
@@ -83,12 +84,14 @@ Known issue (see `TODO.md`): DpiScaleX/Y captured once at ContentRendered. Movin
 - ✅ Auto-arrange (right-aligned grid, content-sized heights)
 - ✅ Settings (AI config, icons-per-row 2-8, separate-folders toggle)
 - ✅ Shell context menu (full IContextMenu, system-identical)
-- ✅ Icon correctness (folders, custom IconLocation, conditional arrow)
-- ✅ DPI-corrected drag/resize/menu position
+- ✅ Icon correctness (folders, custom IconLocation, conditional arrow) + jumbo(256) high-res icons
+- ✅ Per-Monitor v2 DPI (DpiBootstrap + WM_DPICHANGED + per-frame drag/resize + physical-pixel snap guides)
+- ✅ "Always on top" setting + click-to-front when off (SetWindowPos HWND_TOP, no-activate)
+- ✅ Larger icons (40 DIP) / font tuning
 
 ## What's next (see TODO.md)
 
-1. Multi-monitor DPI (WM_DPICHANGED) — user testing with external monitor today.
-2. Phase 2: real Mica/acrylic + Portal frames.
+1. Cross-monitor content softness — root-cause it (DPI plumbing is done; this remains).
+2. Phase 2: real Mica/acrylic — **attempted & reverted** (doesn't render on the custom frame window; see `docs/development-pitfalls.md` §4 + memory `mica-backdrop-deadend`). Needs a different strategy (vanilla-Window test / WinUI island). Portal frames still TODO.
 3. Phase 3b: FileSystemWatcher incremental + VLM fallback.
 4. Packaging: DPAPI key encryption + app icon + single-file publish.
