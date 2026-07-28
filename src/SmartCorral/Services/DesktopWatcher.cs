@@ -36,6 +36,11 @@ public sealed class DesktopWatcher : IDisposable
     private readonly object _gate = new();
     private bool _paused;
 
+    // Paths released BACK to the desktop (drag-out) that the watcher must NOT immediately re-file.
+    // Time-limited so a later, genuinely-new same-named file still gets filed.
+    private readonly Dictionary<string, DateTime> _ignored = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly TimeSpan IgnoreTtl = TimeSpan.FromSeconds(15);
+
     public DesktopWatcher(string desktopPath, Action<IReadOnlyList<string>> onReady)
     {
         _onReady = onReady;
@@ -79,9 +84,29 @@ public sealed class DesktopWatcher : IDisposable
         lock (_gate)
         {
             if (_paused) return;
+            if (IsIgnoredLocked(fullPath)) return; // just released back to desktop — don't re-file it
             _pending.Add(fullPath);
             Arm();
         }
+    }
+
+    /// <summary>Marks a path as "do not auto-file" for a short window. Used when an icon is dragged out
+    /// of a frame back onto the desktop, so the watcher doesn't immediately re-capture it.</summary>
+    public void IgnorePath(string path)
+    {
+        if (string.IsNullOrEmpty(path)) return;
+        lock (_gate) { _ignored[path] = DateTime.UtcNow + IgnoreTtl; }
+    }
+
+    // Must be called under _gate. Lazily expires the queried entry.
+    private bool IsIgnoredLocked(string fullPath)
+    {
+        if (_ignored.TryGetValue(fullPath, out var expiry))
+        {
+            if (DateTime.UtcNow < expiry) return true;
+            _ignored.Remove(fullPath);
+        }
+        return false;
     }
 
     // An existing file was written → only push the trigger out (wait for writes to settle). Crucially,
@@ -104,7 +129,8 @@ public sealed class DesktopWatcher : IDisposable
         lock (_gate)
         {
             if (_paused || _pending.Count == 0) return;
-            batch = _pending.ToList();
+            // Drop paths blacklisted AFTER their Created event fired (e.g. a drag-out release).
+            batch = _pending.Where(p => !IsIgnoredLocked(p)).ToList();
             _pending.Clear();
         }
 

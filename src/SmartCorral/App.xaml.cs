@@ -179,4 +179,12 @@ public partial class App : Application
         _ = AiOrganizeService.CategorizePathsAsync(_frames, _settings, paths,
             onResult: (msg, err) => _tray?.Balloon("自动归类", msg, warn: err));
     }
+
+    /// <summary>Tells the desktop watcher to ignore a path for a short window — call when an item is
+    /// released back to the desktop (drag-out) so it isn't immediately auto-filed again.</summary>
+    public static void IgnoreWatcherPath(string? path)
+    {
+        if (!string.IsNullOrEmpty(path) && Application.Current is App a && a._watcher != null)
+            a._watcher.IgnorePath(path);
+    }
 }

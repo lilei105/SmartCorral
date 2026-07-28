@@ -174,7 +174,7 @@ public partial class FrameWindow
         btn.Click += Item_Click;
         btn.PreviewMouseRightButtonUp += Item_RightClick;
         btn.PreviewMouseLeftButtonDown += Item_DragStart;
-        btn.MouseMove += Item_MouseMove;
+        btn.PreviewMouseMove += Item_MouseMove; // tunneling: fires before the Button's mouse-capture handling
         return btn;
     }
 
@@ -264,10 +264,11 @@ public partial class FrameWindow
         DragDrop.DoDragDrop((DependencyObject)sender, data, DragDropEffects.Move | DragDropEffects.Copy);
 
         // After the drop: if the custody copy is gone, the user dropped on Explorer (release) — remove
-        // the item from the frame. Re-categorize to another frame leaves custody in place → no-op here.
+        // the item from the frame, and tell the watcher to ignore it so it isn't immediately re-filed.
         if (!File.Exists(custodyPath) && !Directory.Exists(custodyPath))
         {
             Logger.Info($"Drag-out: '{item.DisplayName}' released to Explorer — removing from frame.");
+            App.IgnoreWatcherPath(item.SourcePath);
             _mgr.RemoveItem(_frame, item);
         }
     }
