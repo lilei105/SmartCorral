@@ -1,4 +1,5 @@
 using System.Windows;
+using SmartCorral;
 using SmartCorral.Models;
 using SmartCorral.Services;
 
@@ -13,6 +14,7 @@ public partial class SettingsWindow : Window
     {
         _settings = settings;
         InitializeComponent();
+        VersionText.Text = "v" + AppInfo.Version;
         BaseUrlBox.Text = settings.AiBaseUrl;
         KeyBox.Text = settings.AiApiKey;
         ModelBox.Text = settings.AiModel;

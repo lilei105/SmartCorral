@@ -4,6 +4,7 @@ using System.Windows.Forms;
 
 // WinForms is enabled only for the tray NotifyIcon; alias the WPF Application to avoid ambiguity.
 using WpfApp = System.Windows.Application;
+using SmartCorral;
 
 namespace SmartCorral.Services;
 
@@ -25,6 +26,9 @@ public sealed class TrayShell : IDisposable
         };
 
         var menu = new ContextMenuStrip();
+        var header = menu.Items.Add($"灵栅 / Smart Corral  v{AppInfo.Version}");
+        header.Enabled = false;
+        menu.Items.Add("-");
         menu.Items.Add("设置 / Settings", null, (_, _) => onOpenSettings());
         menu.Items.Add("Auto-arrange", null, (_, _) => onAutoArrange());
         menu.Items.Add("重新整理全部 / Re-organize all", null, (_, _) => onReorganizeAll());

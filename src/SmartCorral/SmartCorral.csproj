@@ -9,7 +9,12 @@
     <UseWindowsForms>true</UseWindowsForms>
     <RootNamespace>SmartCorral</RootNamespace>
     <AssemblyName>SmartCorral</AssemblyName>
-    <Version>0.1.0</Version>
+    <!-- Auto-increment per build: '*' = build (days since 2000-01-01) + revision (sec/2).
+         Deterministic must be OFF — the wildcard embeds build time (non-reproducible by design). -->
+    <Deterministic>false</Deterministic>
+    <NoWarn>CS7035</NoWarn>
+    <AssemblyVersion>1.1.*</AssemblyVersion>
+    <FileVersion>1.1.*</FileVersion>
     <ApplicationIcon>app.ico</ApplicationIcon>
     <!-- Per-Monitor v2 DPI awareness is set in CODE (Interop/DpiBootstrap, a module initializer),
          not here: the WPF-generated Main never calls ApplicationConfiguration.Initialize(), and with
