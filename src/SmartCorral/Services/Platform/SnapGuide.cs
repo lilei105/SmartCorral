@@ -63,7 +63,10 @@ public static class SnapGuide
         canvas.Children.Add(_vline);
         canvas.Children.Add(_hline);
         _win.Content = canvas;
-        _win.Show();
+        // NOTE: do NOT Show() here. The overlay window is full-screen + Topmost + transparent; if it
+        // stays shown while idle it lingers above the frames and (via a layered-window compositing
+        // quirk) makes a frame vanish on Win+D. Show it only while actively snapping (ShowVertical/
+        // ShowHorizontal), and Hide() the window itself when a snap ends.
     }
 
     private static Line MakeLine(bool vertical)
@@ -90,6 +93,7 @@ public static class SnapGuide
     public static void ShowVertical(double physicalX, double physicalAnchorY)
     {
         Ensure();
+        _win?.Show(); // (re)show the overlay window for this snap
         if (_win == null || _vline == null) return;
         var (x, cy) = ToCanvas(physicalX, physicalAnchorY);
         _vline.X1 = x; _vline.X2 = x;
@@ -101,6 +105,7 @@ public static class SnapGuide
     public static void ShowHorizontal(double physicalAnchorX, double physicalY)
     {
         Ensure();
+        _win?.Show(); // (re)show the overlay window for this snap
         if (_win == null || _hline == null) return;
         var (cx, y) = ToCanvas(physicalAnchorX, physicalY);
         _hline.Y1 = y; _hline.Y2 = y;
@@ -126,5 +131,7 @@ public static class SnapGuide
     {
         HideVertical();
         HideHorizontal();
+        _win?.Hide(); // hide the overlay window too, so no full-screen topmost window lingers over the
+                      // frames while idle (which, via a layered-window quirk, hid a frame on Win+D)
     }
 }
