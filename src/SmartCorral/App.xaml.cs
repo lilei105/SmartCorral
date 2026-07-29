@@ -1,4 +1,7 @@
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using SmartCorral.Models;
 using SmartCorral.Services;
 using SmartCorral.Services.Ai;
@@ -15,6 +18,21 @@ public partial class App : Application
     private FrameManager? _frames;
     private AppSettings _settings = new();
     private DesktopWatcher? _watcher;
+
+    // Show-on-Win+D: a WinEvent hook (EVENT_SYSTEM_FOREGROUND) fires the INSTANT the foreground window
+    // changes. When it's the desktop (Progman/WorkerW — Win+D / "Show desktop"), float the frames above
+    // the desktop so they stay visible; otherwise honor ForceTopmost (off = behind windows, no blocking).
+    // Event-driven (not polling) so the flip is immediate — no flicker, no "click twice to surface".
+    private delegate void WinEventProc(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime);
+    private WinEventProc? _fgProc;       // kept alive (prevent GC) — assigned in StartForegroundTracker
+    private IntPtr _fgHook = IntPtr.Zero;
+    private bool? _framesTopmost;
+    private System.Windows.Threading.DispatcherTimer? _reassertTimer;
+    [DllImport("user32.dll")] private static extern IntPtr SetWinEventHook(uint eventMin, uint eventMax, IntPtr hmodWinEventProc, WinEventProc lpfnWinEventProc, uint idProcess, uint idThread, uint dwFlags);
+    [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] private static extern bool UnhookWinEvent(IntPtr hWinEventHook);
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetClassName(IntPtr hWnd, StringBuilder lpClassName, int nMaxCount);
+    private const uint EVENT_SYSTEM_FOREGROUND = 0x0003;
+    private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
 
     private void App_OnStartup(object sender, StartupEventArgs e)
     {
@@ -62,6 +80,7 @@ public partial class App : Application
         // 7. Watch the desktop for newly-arrived files → incremental auto-categorize. Started AFTER
         //    RetakeAll (so it doesn't see re-custody moves), only if enabled AND AI is configured.
         StartWatcher();
+        StartForegroundTracker(); // smart topmost: float frames above the desktop on Win+D only
 
         // Best-effort restore on a hard exit; RestoreAll at next launch covers anything this misses.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => { Logger.Info("ProcessExit: RestoreAll."); CustodyService.RestoreAll(); };
@@ -70,6 +89,7 @@ public partial class App : Application
     private void App_OnExit(object sender, ExitEventArgs e)
     {
         Logger.Info("=== Smart Corral exiting (clean) — persist + RestoreAll ===");
+        if (_fgHook != IntPtr.Zero) { UnhookWinEvent(_fgHook); _fgHook = IntPtr.Zero; } // remove foreground hook
         StopWatcher();        // stop watching BEFORE RestoreAll moves files back onto the desktop
         _frames?.Persist();
         int kept = CustodyService.RestoreAll(); // clean exit → desktop restored (locked files retry next launch)
@@ -194,5 +214,49 @@ public partial class App : Application
     {
         if (!string.IsNullOrEmpty(path) && Application.Current is App a && a._watcher != null)
             a._watcher.IgnorePath(path);
+    }
+
+    private void StartForegroundTracker()
+    {
+        _fgProc = OnForegroundChanged;
+        _fgHook = SetWinEventHook(EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND, IntPtr.Zero,
+                                   _fgProc, 0, 0, WINEVENT_OUTOFCONTEXT);
+
+        // One-shot re-assert: "Show desktop" can re-raise the desktop surface a moment AFTER our initial
+        // topmost set (covering a frame or two). Re-applying topmost ~220 ms later beats that late raise.
+        _reassertTimer = new System.Windows.Threading.DispatcherTimer { Interval = System.TimeSpan.FromMilliseconds(220) };
+        _reassertTimer.Tick += (_, _) =>
+        {
+            _reassertTimer.Stop();
+            if (_framesTopmost == true)
+            {
+                _frames?.SetAllTopmost(true);
+                Logger.Info("Foreground: re-asserted frames topmost (post Win+D)");
+            }
+        };
+    }
+
+    // WinEvent callback (runs on the UI thread via WINEVENT_OUTOFCONTEXT): hwnd = the new foreground.
+    private void OnForegroundChanged(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
+    {
+        var cls = new StringBuilder(256);
+        GetClassName(hwnd, cls, cls.Capacity);
+        string name = cls.ToString();
+        bool isDesktop = name == "Progman" || name == "WorkerW";
+
+        // When the desktop is the foreground (Win+D / "Show desktop" / clicking the desktop), float the
+        // frames above the desktop so they stay visible; otherwise honor ForceTopmost (off → behind
+        // windows, not blocking). Win11's "Show desktop" doesn't actually minimize windows, so Win+D and
+        // a desktop click are indistinguishable here — we float on both. Reframe: at the desktop = your
+        // frames are visible (the organizer's home).
+        bool wantTop = _settings.ForceTopmost || isDesktop;
+
+        if (wantTop != _framesTopmost)
+        {
+            _framesTopmost = wantTop;
+            _frames?.SetAllTopmost(wantTop);
+            if (wantTop) _reassertTimer?.Start(); else _reassertTimer?.Stop();
+            Logger.Info($"Foreground '{name}' -> frames topmost={wantTop}");
+        }
     }
 }

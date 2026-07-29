@@ -458,16 +458,16 @@ public partial class FrameWindow
     /// <summary>Re-assert topmost to raise this frame above sibling frames (no focus change).</summary>
     private void BringToFront()
     {
-        if (_mgr.ForceTopmost)
+        if (Topmost)
         {
             Topmost = false;
-            Topmost = true;
-            return;
+            Topmost = true; // re-raise above sibling topmost frames (works whether Topmost is from
+            return;         // ForceTopmost or from the "show on Win+D" foreground tracker)
         }
 
-        // Not always-on-top: raise this frame to the top of the non-topmost Z-order so it comes
-        // above sibling frames, without activating (preserve NOACTIVATE) or becoming topmost — so
-        // other windows can still cover it when you switch away.
+        // Not topmost: raise this frame to the top of the non-topmost Z-order so it comes above sibling
+        // frames, without activating (preserve NOACTIVATE) or becoming topmost — so other windows can
+        // still cover it when you switch away.
         IntPtr hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd != IntPtr.Zero)
             SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);

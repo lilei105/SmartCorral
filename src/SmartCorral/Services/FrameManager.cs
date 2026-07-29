@@ -392,6 +392,14 @@ public class FrameManager
         foreach (var win in _windows.Values) win.Topmost = ForceTopmost;
     }
 
+    /// <summary>Sets Topmost on every open frame window to <paramref name="top"/>. Used by the
+    /// "show on Win+D" behavior: frames go topmost when the desktop is the foreground window (so they
+    /// survive "Show desktop" without being always-on-top and blocking the user's work).</summary>
+    public void SetAllTopmost(bool top)
+    {
+        foreach (var win in _windows.Values) win.Topmost = top;
+    }
+
     /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>
     public void ArrangeAll()
     {
