@@ -422,6 +422,11 @@ public class FrameManager
     public void SetAllTopmost(bool top)
     {
         foreach (var win in _windows.Values) win.Topmost = top;
+        Logger.Info($"SetAllTopmost({top}): {_windows.Count} frame(s).");
+        // When un-topmosting: push frames BELOW the foreground window. Without this, frames dropping
+        // from topmost land on top of the just-activated app → the app "can't come back to the front."
+        if (!top)
+            foreach (var win in _windows.Values) win.LowerBelowForeground();
     }
 
     /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>

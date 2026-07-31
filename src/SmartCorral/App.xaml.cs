@@ -90,7 +90,7 @@ public partial class App : Application
         // 7. Watch the desktop for newly-arrived files → incremental auto-categorize. Started AFTER
         //    RetakeAll (so it doesn't see re-custody moves), only if enabled AND AI is configured.
         StartWatcher();
-        StartForegroundTracker(); // smart topmost: float frames above the desktop on Win+D only
+        StartForegroundTracker(); // smart topmost: float frames above the desktop on Win+D
 
         // Best-effort restore on a hard exit; RestoreAll at next launch covers anything this misses.
         AppDomain.CurrentDomain.ProcessExit += (_, _) => { Logger.Info("ProcessExit: RestoreAll."); CustodyService.RestoreAll(); };

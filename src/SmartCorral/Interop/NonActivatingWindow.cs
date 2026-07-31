@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using SmartCorral.Services;
 using SmartCorral.Services.Platform;
 
 namespace SmartCorral.Interop;

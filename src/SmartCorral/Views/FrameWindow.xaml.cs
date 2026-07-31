@@ -41,6 +41,9 @@ public partial class FrameWindow
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
     private readonly DataFrame _frame;
     private readonly FrameManager _mgr;
     private readonly DispatcherTimer _saveTimer;
@@ -456,6 +459,17 @@ public partial class FrameWindow
     private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => BringToFront();
 
     /// <summary>Re-assert topmost to raise this frame above sibling frames (no focus change).</summary>
+    /// <summary>Push this frame just BELOW the foreground window in the z-order. Used when un-topmosting
+    /// (smart-topmost → off): without this, frames dropping from topmost land ON TOP of the just-activated
+    /// app window, making it look like the app "can't come back to the front."</summary>
+    public void LowerBelowForeground()
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        IntPtr fg = GetForegroundWindow();
+        if (hwnd != IntPtr.Zero && fg != IntPtr.Zero && hwnd != fg)
+            SetWindowPos(hwnd, fg, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+
     private void BringToFront()
     {
         if (Topmost)
