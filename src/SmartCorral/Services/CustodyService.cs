@@ -147,14 +147,20 @@ public static class CustodyService
     /// <summary>Restores custody files/dirs NOT in <paramref name="referencedCustodyPaths"/> back to the
     /// user's desktop — they're orphans (no FrameItem references them), e.g. left behind when a
     /// duplicate item was removed. Non-conflicting names; drops their manifest entries. Called at
-    /// startup BEFORE the desktop watcher starts, so restored files aren't re-captured.</summary>
-    public static void RestoreUnreferenced(IEnumerable<string> referencedCustodyPaths)
+    /// startup BEFORE the desktop watcher starts, so restored files aren't re-captured.
+    /// <paramref name="filedBasenames"/>: if given, orphans whose basename matches a filed item are NOT
+    /// restored (they're redundant duplicates from the basename-dedup step — restoring them to the
+    /// desktop would show the file both in a frame AND on the desktop).</summary>
+    public static void RestoreUnreferenced(IEnumerable<string> referencedCustodyPaths, IEnumerable<string>? filedBasenames = null)
     {
         try
         {
             var keep = new HashSet<string>(
                 referencedCustodyPaths.Where(p => !string.IsNullOrEmpty(p)),
                 StringComparer.OrdinalIgnoreCase);
+            var dupNames = filedBasenames != null
+                ? new HashSet<string>(filedBasenames.Where(n => !string.IsNullOrEmpty(n)), StringComparer.OrdinalIgnoreCase)
+                : null;
             if (!Directory.Exists(CustodyDir)) return;
 
             string desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
@@ -166,6 +172,15 @@ public static class CustodyService
                 if (keep.Contains(entry)) continue; // still referenced by a live item
                 bool isDir = Directory.Exists(entry);
                 string name = Path.GetFileName(entry.TrimEnd('\\', '/'));
+
+                // Skip orphans that are duplicates of filed items (from basename dedup) — restoring them
+                // to the desktop would show the file in BOTH a frame AND on the desktop (confusing).
+                if (dupNames != null && dupNames.Contains(name))
+                {
+                    Logger.Info($"RestoreOrphan: '{name}' is a duplicate of a filed item — kept in custody.");
+                    continue;
+                }
+
                 string target = UniqueTarget(desktop, name, isDir); // non-conflicting on the desktop
                 if (Move(entry, target, isDir) && (File.Exists(target) || Directory.Exists(target)))
                 {

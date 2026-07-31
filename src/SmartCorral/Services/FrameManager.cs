@@ -289,7 +289,13 @@ public class FrameManager
         var referencedCustody = frames.SelectMany(f => f.Items)
             .SelectMany(it => new[] { it.Target ?? "", it.LivePath ?? "" })
             .Where(t => !string.IsNullOrEmpty(t));
-        CustodyService.RestoreUnreferenced(referencedCustody);
+        // Filed basenames: orphans matching these are duplicates (from basename dedup) — DON'T restore
+        // them to the desktop (would show the file in BOTH a frame AND on the desktop).
+        var filedBasenames = frames.SelectMany(f => f.Items)
+            .Select(it => it.SourcePath ?? "")
+            .Where(p => !string.IsNullOrEmpty(p))
+            .Select(p => System.IO.Path.GetFileName(p));
+        CustodyService.RestoreUnreferenced(referencedCustody, filedBasenames);
     }
 
     private static void TryDeleteShortcut(string relativeFilename)
