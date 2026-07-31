@@ -27,10 +27,11 @@ public static class AiCategorizer
         if (allItems.Count == 0) return ("", new List<string>());
 
         const string sys = "You are a desktop organizer AI. Analyze the user's desktop items to understand " +
-            "WHO they are (office worker? developer? designer? student?). Then design 3-7 CREATIVE, " +
+            "WHO they are (office worker? developer? designer? student?). Then design 5-8 CREATIVE, " +
             "PERSONALIZED category names — NOT generic labels like '工具/媒体/社交'. Tailor them to THIS user.\n" +
             "For example: 钉钉+飞书+企业微信 → '办公协作' (not '社交'); Docker+Git+IDE → '开发环境' (not '开发');\n" +
             "游戏+Steam → '游戏娱乐'; 报告+合同+发票 → '商务文档'.\n" +
+            "ALWAYS include a catch-all category (e.g., '杂项' or '其他') for items that don't fit specific ones.\n" +
             "Category names in the SAME language as the majority of the file names.\n" +
             "Reply ONLY with JSON: {\"profile\":\"<one sentence about the user>\"," +
             "\"categories\":[\"<name1>\",\"<name2>\",...]}";
@@ -69,7 +70,9 @@ public static class AiCategorizer
 
         string catList = string.Join(" / ", categories);
         string sys = $"Assign each desktop item to the BEST-FIT category. Categories: {catList}.\n" +
-            "If an item truly doesn't fit any category, omit it. Use the EXACT category names above.\n" +
+            "You MUST provide an entry for EVERY SINGLE item — never omit any. " +
+            "If unsure, assign to the CLOSEST category or the catch-all (杂项/其他). " +
+            "Use the EXACT category names from the list above.\n" +
             "Reply ONLY with JSON: {\"assignments\":[{\"index\":<number>,\"category\":\"<name>\"}]}. " +
             "'index' is the item's number from the list. No commentary.";
 
@@ -94,6 +97,7 @@ public static class AiCategorizer
         string catList = existingCategories.Count > 0 ? string.Join(" / ", existingCategories) : "(none yet)";
         string sys = $"Categorize desktop FOLDERS. Each folder lists its first-level contents.\n" +
             $"EXISTING categories (PREFER these): {catList}.\n" +
+            "You MUST assign EVERY folder — never omit any. If unsure, use the closest existing category.\n" +
             "Only suggest a NEW category if 5+ folders genuinely don't fit any existing one.\n" +
             "Reply ONLY with JSON: {\"assignments\":[{\"index\":<number>,\"category\":\"<name>\"}]}. " +
             "Use existing category names where possible. No commentary.";
