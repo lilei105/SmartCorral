@@ -54,12 +54,44 @@ public static class AiOrganizeService
             return;
         }
 
-        // 3. Categorize via LLM (off-thread) — index-keyed so name echo can't mismatch.
-        Dictionary<int, string> assignments;
+        // 3. Split into files (pass 1) + folders (pass 2), and gather folder first-level children.
+        var fileItems = toCategorize.Where(f => !f.IsFolder).ToList();
+        var folderItems = toCategorize.Where(f => f.IsFolder).ToList();
+        var folderData = await Task.Run(() =>
+            folderItems.Select(f => (folder: f, children: SafeChildren(f.FullPath))).ToList());
+
+        // 4. Three-step LLM pipeline: profile → files → folders.
+        Dictionary<int, string> fileAssignments = new();
+        Dictionary<int, string> folderAssignments = new();
         try
         {
             using var llm = new LlmClient(settings.AiBaseUrl, settings.AiApiKey, settings.AiModel);
-            assignments = await AiCategorizer.CategorizeAsync(llm, toCategorize);
+
+            // 4a. Profile: analyze ALL items → personalized categories.
+            var (profile, categories) = await AiCategorizer.ProfileAsync(llm, toCategorize);
+            Logger.Info($"AI organize: profile='{profile}', categories=[{string.Join(", ", categories)}]");
+            if (categories.Count == 0)
+            {
+                Logger.Warn("AI organize: profile returned no categories.");
+                Report(onResult, "AI 没能设计出分类。", isError: true);
+                return;
+            }
+
+            // 4b. Pass 1: categorize files + .lnk icons.
+            if (fileItems.Count > 0)
+            {
+                fileAssignments = await AiCategorizer.CategorizeAsync(llm, fileItems, categories);
+                Logger.Info($"AI organize: pass 1 (files) {fileAssignments.Count}/{fileItems.Count} categorized.");
+            }
+
+            // 4c. Pass 2: categorize folders (with children) — prefer categories already used in pass 1.
+            if (folderData.Count > 0)
+            {
+                var usedCats = fileAssignments.Values.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+                if (usedCats.Count == 0) usedCats = categories.ToList(); // no files categorized → use all designed
+                folderAssignments = await AiCategorizer.CategorizeFoldersAsync(llm, folderData, usedCats);
+                Logger.Info($"AI organize: pass 2 (folders) {folderAssignments.Count}/{folderData.Count} categorized.");
+            }
         }
         catch (Exception ex)
         {
@@ -67,36 +99,40 @@ public static class AiOrganizeService
             Report(onResult, "AI 分类失败，原因详见 smartcorral.log。", isError: true);
             return;
         }
-        Logger.Info($"AI organize: model categorized {assignments.Count}/{toCategorize.Count} item(s).");
-        if (assignments.Count == 0)
+
+        if (fileAssignments.Count == 0 && folderAssignments.Count == 0)
         {
-            Logger.Warn("AI organize: model returned no categories.");
-            Report(onResult, "AI 这次没有给出分类，桌面保持原样。", isError: true);
+            Logger.Warn("AI organize: model returned no assignments.");
+            Report(onResult, "AI 这次没有给出分类。", isError: true);
             return;
         }
 
-        // 4. Apply on the UI thread (frame creation + COM shortcut import + render).
+        // 5. Apply on the UI thread.
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
             int applied = 0;
-            for (int i = 0; i < toCategorize.Count; i++)
-            {
-                if (!assignments.TryGetValue(i + 1, out string? category))
-                    continue; // model didn't return this one — leave it where it is
-
-                var file = toCategorize[i];
-                var frame = frames.EnsureCategoryFrame(category);
-                if (frames.AddDesktopFile(frame, file.FullPath, file.DisplayName))
+            // Files
+            for (int i = 0; i < fileItems.Count; i++)
+                if (fileAssignments.TryGetValue(i + 1, out string? cat))
                 {
-                    frames.Refresh(frame);
-                    Logger.Info($"AI organize: '{file.DisplayName}' -> 「{category}」");
-                    applied++;
+                    var f = fileItems[i];
+                    var frame = frames.EnsureCategoryFrame(cat);
+                    if (frames.AddDesktopFile(frame, f.FullPath, f.DisplayName))
+                    { frames.Refresh(frame); Logger.Info($"AI organize: '{f.DisplayName}' -> 「{cat}」"); applied++; }
                 }
-            }
-            Logger.Info($"AI organize: filed {applied} item(s) into frames.");
+            // Folders
+            for (int i = 0; i < folderData.Count; i++)
+                if (folderAssignments.TryGetValue(i + 1, out string? cat))
+                {
+                    var f = folderData[i].folder;
+                    var frame = frames.EnsureCategoryFrame(cat);
+                    if (frames.AddDesktopFile(frame, f.FullPath, f.DisplayName))
+                    { frames.Refresh(frame); Logger.Info($"AI organize: '{f.DisplayName}' -> 「{cat}」"); applied++; }
+                }
+            Logger.Info($"AI organize: filed {applied} item(s).");
             frames.RemoveEmptyDefaultFrames();
             frames.SizeFramesToContent();
-            frames.ArrangeAll();   // right-aligned grid + persist
+            frames.ArrangeAll();
             Report(onResult, $"已用 AI 归类 {applied} 项。", isError: false);
         });
     }
@@ -150,11 +186,22 @@ public static class AiOrganizeService
         Logger.Info($"CategorizePaths: {toCategorize.Count} new item(s) to categorize.");
         if (toCategorize.Count == 0) return;
 
+        // Get existing frame titles as the category list — new files go into the user's existing
+        // personalized categories (not generic new ones).
+        var existingCategories = frames.Data.Frames.OfType<DataFrame>()
+            .Select(f => f.Title).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (existingCategories.Count == 0)
+        {
+            Logger.Info("CategorizePaths: no existing categories — leaving new file on desktop.");
+            Report(onResult, "暂无分类框，新文件留在桌面。", isError: false);
+            return;
+        }
+
         Dictionary<int, string> assignments;
         try
         {
             using var llm = new LlmClient(settings.AiBaseUrl, settings.AiApiKey, settings.AiModel);
-            assignments = await AiCategorizer.CategorizeAsync(llm, toCategorize);
+            assignments = await AiCategorizer.CategorizeAsync(llm, toCategorize, existingCategories);
         }
         catch (Exception ex)
         {
@@ -205,6 +252,13 @@ public static class AiOrganizeService
     {
         bool hasKey = !string.IsNullOrWhiteSpace(settings.AiApiKey);
         return !string.IsNullOrWhiteSpace(settings.AiModel) && (hasKey || IsLocalEndpoint(settings.AiBaseUrl));
+    }
+
+    /// <summary>Returns up to 15 first-level child names of a directory (for folder categorization).</summary>
+    private static List<string> SafeChildren(string dir)
+    {
+        try { return Directory.EnumerateFileSystemEntries(dir).Select(p => Path.GetFileName(p)!).Take(15).ToList(); }
+        catch { return new List<string>(); }
     }
 
     private static bool IsLocalEndpoint(string url)
