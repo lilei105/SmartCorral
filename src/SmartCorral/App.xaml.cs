@@ -74,8 +74,18 @@ public partial class App : Application
         _frames.RefreshAll();
         Logger.Info($"Startup ready: {_frames.Data.Frames.Count} frame(s).");
 
-        // 6. AI auto-categorize (fire-and-forget; off-thread LLM, UI-thread apply). No-op if not configured.
-        _ = AiOrganizeService.RunAsync(_frames, _settings);
+        // 6. AI auto-categorize — ONLY on the first run (no items filed yet). On subsequent launches the
+        //    incremental watcher handles genuinely-new files; the user can manually re-categorize from
+        //    the tray. This avoids re-shuffling / duplicating on every boot.
+        if (!_frames.HasAnyItems())
+        {
+            Logger.Info("Startup: no items filed yet — running AI auto-categorize.");
+            _ = AiOrganizeService.RunAsync(_frames, _settings);
+        }
+        else
+        {
+            Logger.Info("Startup: items already filed — skipping auto-categorize (tray 'Re-categorize' to re-run).");
+        }
 
         // 7. Watch the desktop for newly-arrived files → incremental auto-categorize. Started AFTER
         //    RetakeAll (so it doesn't see re-custody moves), only if enabled AND AI is configured.
