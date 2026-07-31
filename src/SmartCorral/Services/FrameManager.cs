@@ -243,6 +243,24 @@ public class FrameManager
             }
         }
 
+        // 2b. Basename duplicates: e.g. a file originally on Public\Desktop was restored to the personal
+        //     desktop (write fallback) → its SourcePath differs but the filename is the same → the AI
+        //     re-filed it → two items with the same basename. Keep the first, drop the rest.
+        var seenNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        foreach (var f in frames)
+        {
+            var nameDups = f.Items.Where(it =>
+            {
+                if (string.IsNullOrEmpty(it.SourcePath)) return false;
+                return !seenNames.Add(System.IO.Path.GetFileName(it.SourcePath));
+            }).ToList();
+            foreach (var d in nameDups)
+            {
+                Logger.Info($"Sweep: duplicate basename '{System.IO.Path.GetFileName(d.SourcePath)}' — removing extra '{d.DisplayName}'.");
+                f.Items.Remove(d); TryDeleteShortcut(d.Filename); any = true;
+            }
+        }
+
         // 3. Orphaned wrapper .lnk (in shortcuts/ but referenced by no item).
         var usedWrappers = new HashSet<string>(
             frames.SelectMany(f => f.Items).Select(it => it.Filename ?? ""),

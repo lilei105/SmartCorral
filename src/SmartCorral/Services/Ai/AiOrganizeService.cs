@@ -36,8 +36,16 @@ public static class AiOrganizeService
         Logger.Info($"AI organize: scanned {allFiles.Count} desktop item(s).");
 
         // 2. Skip files already imported into a frame.
-        var existing = new HashSet<string>(frames.AllItemSourcePaths(), StringComparer.OrdinalIgnoreCase);
-        var toCategorize = allFiles.Where(f => !existing.Contains(f.FullPath)).ToList();
+        var existingPaths = new HashSet<string>(frames.AllItemSourcePaths(), StringComparer.OrdinalIgnoreCase);
+        // Also skip by BASENAME: if the file was restored from Public\Desktop → personal\Desktop (write
+        // fallback), its path differs from the SourcePath on record but the filename is the same →
+        // without this check the AI would re-file it and create a duplicate.
+        var existingNames = new HashSet<string>(
+            frames.AllItemSourcePaths().Select(p => Path.GetFileName(p ?? "")).Where(n => !string.IsNullOrEmpty(n)),
+            StringComparer.OrdinalIgnoreCase);
+        var toCategorize = allFiles.Where(f =>
+            !existingPaths.Contains(f.FullPath) &&
+            !existingNames.Contains(Path.GetFileName(f.FullPath))).ToList();
         Logger.Info($"AI organize: {toCategorize.Count} to categorize ({allFiles.Count - toCategorize.Count} already filed).");
         if (toCategorize.Count == 0)
         {
@@ -131,6 +139,13 @@ public static class AiOrganizeService
             string ext = isDir ? "" : Path.GetExtension(p).TrimStart('.').ToLowerInvariant();
             toCategorize.Add(new FileDescriptor(p, name, ext, isDir));
         }
+
+        // Skip files already filed by BASENAME (handles Public\Desktop → personal\Desktop restore fallback
+        // where the SourcePath differs but the filename is the same — prevents duplicates).
+        var existingNames = new HashSet<string>(
+            frames.AllItemSourcePaths().Select(sp => Path.GetFileName(sp ?? "")).Where(n => !string.IsNullOrEmpty(n)),
+            StringComparer.OrdinalIgnoreCase);
+        toCategorize = toCategorize.Where(d => !existingNames.Contains(Path.GetFileName(d.FullPath))).ToList();
 
         Logger.Info($"CategorizePaths: {toCategorize.Count} new item(s) to categorize.");
         if (toCategorize.Count == 0) return;
