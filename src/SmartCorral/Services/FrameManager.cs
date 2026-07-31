@@ -466,7 +466,10 @@ public class FrameManager
     /// every custodied item to the desktop first, so the desktop is repopulated before the AI re-scan.</summary>
     public void ClearAll()
     {
-        CustodyService.RestoreAll(); // items → desktop, manifest cleared
+        CustodyService.RestoreAll(); // manifest-tracked items → desktop, manifest cleared
+        // Also restore any orphaned custody files (e.g. basename-dedup leftovers whose manifest entry
+        // was removed but the file remains). With no filed items, nothing is skipped → all go back.
+        CustodyService.RestoreUnreferenced(System.Array.Empty<string>(), System.Array.Empty<string>());
 
         foreach (var (id, win) in _windows.ToList()) win.Close();
         _windows.Clear();
