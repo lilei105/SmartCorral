@@ -68,10 +68,14 @@ public partial class FrameWindow
     private FrameItem? _itemDragItem;
     private const string FrameItemDragFormat = "SmartCorralFrameItem";
 
+    /// <summary>The frame's display title (for logging — WPF Window.Title is unused on borderless frames).</summary>
+    public string FrameTitle => _frame.Title;
+
     public FrameWindow(DataFrame frame, FrameManager mgr)
     {
         _frame = frame;
         _mgr = mgr;
+        ShowActivated = false; // never steal foreground — not even on (re)open
         InitializeComponent();
         TitleText.Text = frame.Title;
 
@@ -458,7 +462,50 @@ public partial class FrameWindow
 
     private void Window_PreviewMouseDown(object sender, MouseButtonEventArgs e) => BringToFront();
 
-    /// <summary>Re-assert topmost to raise this frame above sibling frames (no focus change).</summary>
+    /// <summary>Immediately set/clear WS_EX_TOPMOST via Win32 (synchronous), bypassing WPF's
+    /// deferred Topmost property — no race from WPF's layout-pass processing.</summary>
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private static readonly IntPtr HWND_NOTOPMOST = new(-2);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)]
+    private static extern int GetWindowLongEx(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)]
+    private static extern int SetWindowLongEx(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    private const int GWL_EX_STYLE = -20;
+    private const int WS_EX_TOPMOST_FLAG = 0x00000008;
+
+    /// <summary>Current WS_EX_TOPMOST state of this window's HWND (live kernel read). Used by
+    /// FrameManager.SetAllTopmost to verify the flag actually landed — the kernel CAN silently
+    /// veto it (e.g. the implicit-owner constraint documented in NonActivatingWindow).</summary>
+    public bool HasTopmostFlag()
+    {
+        IntPtr hwnd = new WindowInteropHelper(this).Handle;
+        return hwnd != IntPtr.Zero && (GetWindowLongEx(hwnd, GWL_EX_STYLE) & WS_EX_TOPMOST_FLAG) != 0;
+    }
+
+    public void SetTopmostDirect(bool top)
+    {
+        try
+        {
+            IntPtr hwnd = new WindowInteropHelper(this).Handle;
+            if (hwnd == IntPtr.Zero) return;
+
+            SetWindowPos(hwnd, top ? HWND_TOPMOST : HWND_NOTOPMOST, 0, 0, 0, 0,
+                         SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
+            if (HasTopmostFlag() == top) return;
+
+            // SetWindowPos "succeeded" but the flag didn't land — write the style bit directly.
+            int exStyle = GetWindowLongEx(hwnd, GWL_EX_STYLE);
+            SetWindowLongEx(hwnd, GWL_EX_STYLE,
+                new IntPtr(top ? exStyle | WS_EX_TOPMOST_FLAG : exStyle & ~WS_EX_TOPMOST_FLAG));
+
+            if (HasTopmostFlag() != top)
+                Logger.Warn($"SetTopmostDirect({top}) '{_frame.Title}': WS_EX_TOPMOST vetoed (hwnd=0x{hwnd.ToInt64():X}).");
+        }
+        catch (Exception ex) { Logger.Error($"SetTopmostDirect threw for '{_frame.Title}'", ex); }
+    }
+
     /// <summary>Push this frame just BELOW the foreground window in the z-order. Used when un-topmosting
     /// (smart-topmost → off): without this, frames dropping from topmost land ON TOP of the just-activated
     /// app window, making it look like the app "can't come back to the front."</summary>

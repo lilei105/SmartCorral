@@ -18,6 +18,7 @@ namespace SmartCorral.Interop;
 public class NonActivatingWindow : Window
 {
     private const int GWL_EXSTYLE = -20;
+    private const int GWLP_HWNDPARENT = -8;
     private const int WS_EX_NOACTIVATE = 0x08000000;
 
     private const int WM_MOUSEACTIVATE = 0x0021;
@@ -34,6 +35,10 @@ public class NonActivatingWindow : Window
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
 
+    // 64-bit only (app runs x64): needed to clear the HWND-sized implicit owner.
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
+    private static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
@@ -44,6 +49,14 @@ public class NonActivatingWindow : Window
         // Add WS_EX_NOACTIVATE so Windows never gives this window the keyboard focus.
         int exStyle = GetWindowLong(handle, GWL_EXSTYLE);
         SetWindowLong(handle, GWL_EXSTYLE, exStyle | WS_EX_NOACTIVATE);
+
+        // Clear the implicit OWNER Win32 assigns to top-level windows. An owned window's
+        // WS_EX_TOPMOST is constrained by its owner (the kernel promotes/demotes the whole
+        // ownership chain together) — if the implicit owner is a window that can't be promoted,
+        // the kernel silently strips WS_EX_TOPMOST the moment we set it. Observed on Win11:
+        // SetWindowPos(HWND_TOPMOST) returns success but the style reads back unchanged.
+        // We never rely on ownership, so dropping it is free.
+        SetWindowLongPtr(handle, GWLP_HWNDPARENT, IntPtr.Zero);
 
         // Seed the shared scale from this window's own DPI, so it is correct before the first
         // WM_DPICHANGED fires (and even when the app runs entirely on one monitor).

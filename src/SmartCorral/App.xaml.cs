@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using SmartCorral.Models;
 using SmartCorral.Services;
 using SmartCorral.Services.Ai;
+using SmartCorral.Interop;
 using SmartCorral.Views;
 
 // Resolve the WPF Application (avoid ambiguity with System.Windows.Forms.Application, since WinForms is enabled for the tray).
@@ -249,6 +250,15 @@ public partial class App : Application
     // WinEvent callback (runs on the UI thread via WINEVENT_OUTOFCONTEXT): hwnd = the new foreground.
     private void OnForegroundChanged(IntPtr hWinEventHook, uint eventType, IntPtr hwnd, int idObject, int idChild, uint dwEventThread, uint dwmsEventTime)
     {
+        // Ignore foreground transitions to one of OUR frame windows (a frame can briefly take the
+        // foreground when it's (re)created — e.g. the topmost self-heal reopen). Treating that as
+        // "user switched to an app" would rip topmost off every frame right after we set it.
+        if (_frames != null && _frames.IsFrameHwnd(hwnd))
+        {
+            Logger.Info($"Foreground 0x{hwnd.ToInt64():X} is one of our frames — ignored.");
+            return;
+        }
+
         var cls = new StringBuilder(256);
         GetClassName(hwnd, cls, cls.Capacity);
         string name = cls.ToString();

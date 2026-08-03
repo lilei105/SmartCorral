@@ -419,14 +419,49 @@ public class FrameManager
     /// <summary>Sets Topmost on every open frame window to <paramref name="top"/>. Used by the
     /// "show on Win+D" behavior: frames go topmost when the desktop is the foreground window (so they
     /// survive "Show desktop" without being always-on-top and blocking the user's work).</summary>
+    /// <summary>Close and reopen a frame window (new HWND) — used to reset corrupted WPF window state.</summary>
+    public void ReopenFrame(System.Guid id)
+    {
+        var f = Data.Frames.FirstOrDefault(x => x.Id == id) as DataFrame;
+        if (f == null) return;
+        if (_windows.TryGetValue(id, out var oldWin)) { _windows.Remove(id); oldWin.Close(); }
+        Logger.Info($"ReopenFrame: reopening '{f.Title}' to get a fresh HWND.");
+        Open(f);
+        RefreshAll();
+    }
+
+    /// <summary>True if <paramref name="hwnd"/> is one of the live frame windows.</summary>
+    public bool IsFrameHwnd(IntPtr hwnd)
+    {
+        foreach (var win in _windows.Values)
+            if (new System.Windows.Interop.WindowInteropHelper(win).Handle == hwnd) return true;
+        return false;
+    }
+
     public void SetAllTopmost(bool top)
     {
-        foreach (var win in _windows.Values) win.Topmost = top;
-        Logger.Info($"SetAllTopmost({top}): {_windows.Count} frame(s).");
-        // When un-topmosting: push frames BELOW the foreground window. Without this, frames dropping
-        // from topmost land on top of the just-activated app → the app "can't come back to the front."
+        foreach (var win in _windows.Values)
+            win.SetTopmostDirect(top);
         if (!top)
             foreach (var win in _windows.Values) win.LowerBelowForeground();
+        Logger.Info($"SetAllTopmost({top}): {_windows.Count} frame(s).");
+
+        if (!top) return;
+
+        // Self-heal: a frame whose HWND refused WS_EX_TOPMOST gets a FRESH window (new HWND) and one
+        // more try. Rare — but the kernel CAN silently veto the flag (see the implicit-owner note in
+        // NonActivatingWindow), so verify-and-reopen is the safety net.
+        foreach (var (id, win) in _windows.ToList())
+        {
+            if (win.HasTopmostFlag()) continue;
+            Logger.Warn($"SetAllTopmost: '{win.FrameTitle}' HWND rejected topmost — reopening with a fresh HWND.");
+            ReopenFrame(id);
+            if (_windows.TryGetValue(id, out var fresh))
+            {
+                fresh.SetTopmostDirect(true);
+                Logger.Info($"SetAllTopmost: after reopen '{fresh.FrameTitle}' EX_TOPMOST={fresh.HasTopmostFlag()}");
+            }
+        }
     }
 
     /// <summary>Right-aligned grid auto-arrange of all frames; moves windows + persists.</summary>
